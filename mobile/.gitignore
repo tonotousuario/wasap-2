@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+.native-cache/
+android/
+ios/
+dist/
+.env*
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.ipa
+*.apk
+*.aab

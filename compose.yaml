@@ -1,0 +1,37 @@
+services:
+  server:
+    build: .
+    init: true
+    # Match the operator's uid/gid so private 0600 bind-mounted files stay private.
+    user: "${WASAP_UID:-1000}:${WASAP_GID:-1000}"
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}/tcp"
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: ${SERVER_PORT:-5050}
+      APP_TIMEZONE: ${APP_TIMEZONE:-America/Mexico_City}
+      DB_URL: ${DB_URL:?Set DB_URL with sslmode=verify-full}
+      DB_USER: ${DB_USER:?Set DB_USER}
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      TLS_KEYSTORE: /run/wasap/server.p12
+      TLS_KEYSTORE_PASSWORD_FILE: /run/secrets/keystore_password
+      TLS_CA_FILE: /run/wasap/ca.crt
+    secrets:
+      - db_password
+      - keystore_password
+    volumes:
+      - ./certs/server.p12:/run/wasap/server.p12:ro
+      - ./certs/ca.crt:/run/wasap/ca.crt:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+secrets:
+  db_password:
+    file: ${DB_PASSWORD_PATH:-./certs/db-password}
+  keystore_password:
+    file: ./certs/keystore-password

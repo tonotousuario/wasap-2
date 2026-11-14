@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WASAP 2 · Avances</title>
+<style>
+	:root { --ground: #0F1216; --ink: #E9E4D8; --faint: #8C887F; --client: #F2A33A; }
+	html, body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); overflow: hidden; }
+	video { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: var(--ground); }
+	#hint {
+		position: fixed; left: 16px; bottom: 12px; font: 13px/1.4 ui-monospace, monospace; color: var(--faint);
+		transition: opacity .6s ease-out;
+	}
+	#hint b { color: var(--client); font-weight: 500; }
+	body.idle #hint { opacity: 0; }
+	body.idle { cursor: none; }
+</style>
+</head>
+<body>
+<video id="v" playsinline muted preload="auto"></video>
+<div id="hint"><b>→</b> / espacio siguiente · <b>←</b> anterior · <b>R</b> repetir · <b>F</b> pantalla completa · <span id="pos"></span></div>
+<script>
+	const ids = ['S1-Portada','S2-Alcance','S3-Arquitectura','S4-Trama','S5-Garantias','S6-Estado','S7-Problemas','S8-Siguientes'];
+	const v = document.getElementById('v');
+	const pos = document.getElementById('pos');
+	let i = 0;
+	const show = (n) => {
+		i = Math.max(0, Math.min(ids.length - 1, n));
+		v.src = `out/clips/${ids[i]}.mp4`;
+		v.play().catch(() => {});
+		pos.textContent = `${i + 1} / ${ids.length}`;
+	};
+	// Clips stop on their last frame, which is the resting slide.
+	document.addEventListener('keydown', (e) => {
+		if (['ArrowRight', ' ', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); show(i + 1); }
+		else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+		else if (e.key === 'r' || e.key === 'R') { v.currentTime = 0; v.play(); }
+		else if (e.key === 'f' || e.key === 'F') {
+			document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+		}
+		else if (e.key === 'Home') show(0);
+		else if (e.key === 'End') show(ids.length - 1);
+	});
+	v.addEventListener('click', () => show(i + 1));
+	let t;
+	const wake = () => { document.body.classList.remove('idle'); clearTimeout(t); t = setTimeout(() => document.body.classList.add('idle'), 2500); };
+	document.addEventListener('mousemove', wake); wake();
+	show(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+node_modules/
+.local/
+.expo/
+.gradle/
+**/build/
+.superpowers/
+.env
+.env.*
+!.env.example
+certs/*
+!certs/.gitkeep
+mobile/android/
+mobile/ios/
+*.log
+*.tsbuildinfo

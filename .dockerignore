@@ -1,0 +1,8 @@
+.git
+.superpowers
+**/node_modules
+**/build
+**/.gradle
+.env*
+certs
+mobile

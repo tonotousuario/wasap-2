@@ -1,0 +1,22 @@
+[
+  {
+    "file": "ios/TcpSocketClient.m",
+    "original": "f0c135f8e9d1df28df9796d5829464ba0d07211a536383df3b75e73ee895a777",
+    "patched": "8fc2a686234e717baf8f16a5a7dc5ffa3dedaa9c0d36b8137b596b4472c4c289"
+  },
+  {
+    "file": "android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketClient.java",
+    "original": "bba6b52a8bfc2fe8a599ebada62188d1dc8897a424923c3380106db452dec7db",
+    "patched": "03c29dc3a2afacbd63b0fd55444c162fa968ead356ab25efdd091d09c4360ce6"
+  },
+  {
+    "file": "android/build.gradle",
+    "original": "a0677fbfbbd2882f9871d799291d74cf418f784d0a914c3a180a67e521675152",
+    "patched": "fa0520f1f508d6433cfccb4bfeb55d8f1b21e40a64018b1abc75c5b3a6311bf4"
+  },
+  {
+    "file": "android/src/main/AndroidManifest.xml",
+    "original": "bcf48f5eb633a761a5217f8a6aafba3ac9b07f6fe6381bb9c0043244469dcdc0",
+    "patched": "1f714c3265f1c9ac76febd1b5aa384a394e6a93429321b8ca9a7f8d88f864c55"
+  }
+]

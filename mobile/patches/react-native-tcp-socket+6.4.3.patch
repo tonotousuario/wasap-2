@@ -1,0 +1,235 @@
+--- a/ios/TcpSocketClient.m
++++ b/ios/TcpSocketClient.m
+@@ -189,9 +189,10 @@
+         return;
+     NSMutableDictionary *settings = [NSMutableDictionary dictionary];
+     _resolvableCaCert = [self getResolvableOption:tlsOptions forKey:@"ca"];
+-    BOOL checkValidity = (tlsOptions[@"rejectUnauthorized"]
+-                              ? [tlsOptions[@"rejectUnauthorized"] boolValue]
+-                              : true);
++    // WASAP: fail closed; public CA is an anchor, never a leaf pin.
++    BOOL checkValidity = YES;
++    _checkValidity = YES;
++    [settings setObject:@(kTLSProtocol12) forKey:GCDAsyncSocketSSLProtocolVersionMin];
+     if (!checkValidity) {
+         // Do not validate
+         _checkValidity = false;
+@@ -509,59 +510,30 @@
+     }
+     _peerTrust = (SecTrustRef)CFRetain(trust);
+ 
+-    // Check if we should check the validity
+-    if (!_checkValidity) {
+-        completionHandler(YES);
+-        return;
+-    }
+-
+-    // Server certificate
+-    SecCertificateRef serverCertificate = SecTrustGetCertificateAtIndex(trust, 0);
+-    CFDataRef serverCertificateData = SecCertificateCopyData(serverCertificate);
+-    const UInt8 *const serverData = CFDataGetBytePtr(serverCertificateData);
+-    const CFIndex serverDataSize = CFDataGetLength(serverCertificateData);
+-    NSData *cert1 = [NSData dataWithBytes:serverData
+-                                   length:(NSUInteger)serverDataSize];
+-
+-    // Local certificate
+-    NSString *pemCaCert = [_resolvableCaCert resolve];
+-    if (!pemCaCert) {
+-        RCTLogWarn(@"Failed to resolve CA certificate");
++    // WASAP: evaluate the chain, dates and configured DNS/IP identity.
++    if (!_checkValidity || !_host || _host.length == 0 || !_resolvableCaCert) {
+         completionHandler(NO);
+         return;
+     }
+-
+-    // Strip PEM header and footer
+-    NSString *cleanedCaCert = [self stripPEMHeader:pemCaCert
+-                                            prefix:@"CERTIFICATE"];
+-    NSData *pemCaCertData = [[NSData alloc]
+-        initWithBase64EncodedString:cleanedCaCert
+-                            options:
+-                                NSDataBase64DecodingIgnoreUnknownCharacters];
+-
+-    SecCertificateRef localCertificate =
+-        SecCertificateCreateWithData(NULL, (CFDataRef)pemCaCertData);
+-    if (!localCertificate) {
+-        [NSException raise:@"Configuration invalid"
+-                    format:@"Failed to parse PEM certificate"];
+-    }
+-
+-    CFDataRef myCertData = SecCertificateCopyData(localCertificate);
+-    const UInt8 *const localData = CFDataGetBytePtr(myCertData);
+-    const CFIndex localDataSize = CFDataGetLength(myCertData);
+-    NSData *cert2 = [NSData dataWithBytes:localData
+-                                   length:(NSUInteger)localDataSize];
+-
+-    if (cert1 == nil || cert2 == nil) {
+-        RCTLogWarn(@"BAD SSL CERTIFICATE");
+-        completionHandler(NO);
+-        return;
+-    }
+-    if ([cert1 isEqualToData:cert2]) {
+-        completionHandler(YES);
+-    } else {
+-        completionHandler(NO);
+-    }
++    NSString *pem = [_resolvableCaCert resolve];
++    if (!pem) { completionHandler(NO); return; }
++    NSString *cleaned = [self stripPEMHeader:pem prefix:@"CERTIFICATE"];
++    NSData *der = [[NSData alloc] initWithBase64EncodedString:cleaned
++                        options:NSDataBase64DecodingIgnoreUnknownCharacters];
++    SecCertificateRef anchor = der ? SecCertificateCreateWithData(NULL, (__bridge CFDataRef)der) : NULL;
++    if (!anchor) { completionHandler(NO); return; }
++    SecPolicyRef policy = SecPolicyCreateSSL(true, (__bridge CFStringRef)_host);
++    NSArray *anchors = @[(__bridge id)anchor];
++    OSStatus status = SecTrustSetPolicies(trust, policy);
++    if (status == errSecSuccess) status = SecTrustSetAnchorCertificates(trust, (__bridge CFArrayRef)anchors);
++    if (status == errSecSuccess) status = SecTrustSetAnchorCertificatesOnly(trust, true);
++    if (status == errSecSuccess) status = SecTrustSetNetworkFetchAllowed(trust, false);
++    CFErrorRef error = NULL;
++    BOOL valid = status == errSecSuccess && SecTrustEvaluateWithError(trust, &error);
++    if (error) CFRelease(error);
++    CFRelease(policy);
++    CFRelease(anchor);
++    completionHandler(valid);
+ }
+ 
+ - (void)socket:(GCDAsyncSocket *)sock
+--- a/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketClient.java
++++ b/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketClient.java
+@@ -17,6 +17,7 @@
+ import java.util.concurrent.Executors;
+ 
+ import javax.net.ssl.SSLSocket;
++import javax.net.ssl.SSLParameters;
+ import javax.net.ssl.SSLSocketFactory;
+ 
+ class TcpSocketClient extends TcpSocket {
+@@ -26,6 +27,7 @@
+     private TcpReceiverTask receiverTask;
+     private Socket socket;
+     private boolean closed = true;
++    private String peerHost;
+ 
+     TcpSocketClient(TcpEventListener receiverListener, Integer id, Socket socket) {
+         super(id);
+@@ -41,13 +43,9 @@
+ 
+     public void connect(Context context, String address, final Integer port, ReadableMap options, Network network, ReadableMap tlsOptions) throws IOException, GeneralSecurityException {
+         if (socket != null) throw new IOException("Already connected");
+-        if (tlsOptions != null) {
+-            SSLSocketFactory ssf = getSSLSocketFactory(context, tlsOptions);
+-            socket = ssf.createSocket();
+-            ((SSLSocket) socket).setUseClientMode(true);
+-        } else {
+-            socket = new Socket();
+-        }
++        // WASAP: layer TLS after TCP connect so the original host/IP is retained.
++        peerHost = address;
++        socket = new Socket();
+         // Get the addresses
+         final String localAddress = options.hasKey("localAddress") ? options.getString("localAddress") : "0.0.0.0";
+         final InetAddress localInetAddress = InetAddress.getByName(localAddress);
+@@ -67,17 +65,42 @@
+         socket.bind(new InetSocketAddress(localInetAddress, localPort));
+         final int connectTimeout = options.hasKey("connectTimeout") ? options.getInt("connectTimeout") : 0; 
+         socket.connect(new InetSocketAddress(remoteInetAddress, port), connectTimeout);
+-        if (socket instanceof SSLSocket) ((SSLSocket) socket).startHandshake();
++        if (tlsOptions != null) {
++            SSLSocketFactory factory = getSSLSocketFactory(context, tlsOptions);
++            SSLSocket secure = (SSLSocket) factory.createSocket(socket, address, port, true);
++            configureVerifiedTLS(secure);
++            secure.setSoTimeout(connectTimeout > 0 ? connectTimeout : 15000);
++            secure.startHandshake();
++            secure.setSoTimeout(0);
++            socket = secure;
++        }
+         startListening();
+     }
+ 
+     public void startTLS(Context context, ReadableMap tlsOptions) throws IOException, GeneralSecurityException {
+         if (socket instanceof SSLSocket) return;
+         SSLSocketFactory ssf = getSSLSocketFactory(context, tlsOptions);
+-        SSLSocket sslSocket = (SSLSocket) ssf.createSocket(socket, socket.getInetAddress().getHostAddress(), socket.getPort(), true);
+-        sslSocket.setUseClientMode(true);
++        if (peerHost == null || peerHost.isEmpty()) throw new IOException("TLS peer host required");
++        SSLSocket sslSocket = (SSLSocket) ssf.createSocket(socket, peerHost, socket.getPort(), true);
++        configureVerifiedTLS(sslSocket);
++        sslSocket.setSoTimeout(15000);
+         sslSocket.startHandshake();
++        sslSocket.setSoTimeout(0);
+         socket = sslSocket;
++    }
++
++    // WASAP: JS rejectUnauthorized=false cannot disable verification.
++    private void configureVerifiedTLS(SSLSocket secure) throws IOException {
++        secure.setUseClientMode(true);
++        SSLParameters parameters = secure.getSSLParameters();
++        parameters.setEndpointIdentificationAlgorithm("HTTPS");
++        secure.setSSLParameters(parameters);
++        java.util.ArrayList<String> protocols = new java.util.ArrayList<>();
++        for (String protocol : secure.getSupportedProtocols()) {
++            if (protocol.equals("TLSv1.2") || protocol.equals("TLSv1.3")) protocols.add(protocol);
++        }
++        if (protocols.isEmpty()) throw new IOException("TLS 1.2 or newer required");
++        secure.setEnabledProtocols(protocols.toArray(new String[0]));
+     }
+ 
+     private boolean containsKey(ReadableArray array, String key) {
+@@ -114,30 +137,13 @@
+         final String certAlias = tlsOptions.hasKey("certAlias") ? tlsOptions.getString("certAlias") : "";
+         final KeystoreInfo keystoreInfo = new KeystoreInfo(keystoreName, caAlias, certAlias, keyAlias);
+ 
+-        if (tlsOptions.hasKey("rejectUnauthorized") && !tlsOptions.getBoolean("rejectUnauthorized")) {
+-            if ((customTlsKey != null && customTlsCert != null) ||
+-                    (keyAlias != null && !keyAlias.isEmpty() && customTlsKey == null) ) {
+-                ssf = SSLCertificateHelper.createCustomTrustedSocketFactory(
+-                        context,
+-                        customTlsCa,
+-                        customTlsKey,
+-                        customTlsCert,
+-                        keystoreInfo
+-                );
+-            } else {
+-                ssf = SSLCertificateHelper.createBlindSocketFactory();
+-            }
+-        } else {
+-            ssf = (customTlsCa != null)
+-                    ? SSLCertificateHelper.createCustomTrustedSocketFactory(
+-                            context,
+-                            customTlsCa,
+-                            customTlsKey,
+-                            customTlsCert,
+-                            keystoreInfo
+-                    )
+-                    : (SSLSocketFactory) SSLSocketFactory.getDefault();
+-        }
++        // Public CA only. Never enter upstream's blind client-identity branch.
++        if (customTlsCa == null || customTlsKey != null || customTlsCert != null ||
++                (keyAlias != null && !keyAlias.isEmpty())) {
++            throw new GeneralSecurityException("A public installation CA is required; client keys are forbidden");
++        }
++        ssf = SSLCertificateHelper.createCustomTrustedSocketFactory(
++                context, customTlsCa, null, null, keystoreInfo);
+         return ssf;
+     }
+ 
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -5,6 +5,7 @@
+ }
+ 
+ android {
++    namespace "com.asterinet.react.tcpsocket"
+     compileSdkVersion safeExtGet('compileSdkVersion', 29)
+ 
+     defaultConfig {
+--- a/android/src/main/AndroidManifest.xml
++++ b/android/src/main/AndroidManifest.xml
+@@ -1,5 +1,4 @@
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-          package="com.asterinet.react.tcpsocket">
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+ </manifest>

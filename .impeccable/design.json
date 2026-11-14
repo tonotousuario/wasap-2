@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T00:00:00Z",
+  "title": "Design System: WASAP 2 · Trama en pantalla",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Grafito azulado",
+        "canonical": "oklch(18.1% 0.010 256)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#232528",
+          "#3F4247",
+          "#5E6267",
+          "#7F8388",
+          "#A1A5AB",
+          "#C6C9CE",
+          "#ECEFF2"
+        ]
+      },
+      "ground-raised": {
+        "role": "neutral",
+        "displayName": "Grafito elevado",
+        "canonical": "oklch(21.6% 0.013 258)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#232529",
+          "#3E4248",
+          "#5D6269",
+          "#7D838A",
+          "#A0A5AE",
+          "#C5C9D1",
+          "#EBEFF4"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hilo",
+        "canonical": "oklch(30.7% 0.018 258)",
+        "tonalRamp": [
+          "#090B0E",
+          "#22252B",
+          "#3D424B",
+          "#5B626C",
+          "#7C838E",
+          "#9EA6B1",
+          "#C3CAD3",
+          "#EAEFF6"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Hueso",
+        "canonical": "oklch(91.9% 0.017 88)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#27251F",
+          "#454239",
+          "#656157",
+          "#868277",
+          "#A9A599",
+          "#CDC9BF",
+          "#F1EEE7"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Hueso apagado",
+        "canonical": "oklch(76.1% 0.016 86)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#272520",
+          "#454239",
+          "#656157",
+          "#878277",
+          "#A9A59A",
+          "#CDC9BF",
+          "#F1EEE7"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Hueso tenue",
+        "canonical": "oklch(62.8% 0.014 87)",
+        "tonalRamp": [
+          "#0C0B09",
+          "#272520",
+          "#45423B",
+          "#656158",
+          "#868279",
+          "#A9A59B",
+          "#CCC9C1",
+          "#F1EEE8"
+        ]
+      },
+      "client": {
+        "role": "primary",
+        "displayName": "Ámbar de trama",
+        "canonical": "oklch(77.6% 0.148 69)",
+        "tonalRamp": [
+          "#180600",
+          "#401900",
+          "#6C2F00",
+          "#944C00",
+          "#B96E00",
+          "#DF9221",
+          "#FEBA69",
+          "#FFE5B0"
+        ]
+      },
+      "server": {
+        "role": "secondary",
+        "displayName": "Azul acero",
+        "canonical": "oklch(74.2% 0.078 242)",
+        "tonalRamp": [
+          "#020C16",
+          "#0C283A",
+          "#1B4663",
+          "#35668A",
+          "#5688AD",
+          "#79ABD2",
+          "#A4CFF1",
+          "#D5F3FF"
+        ]
+      },
+      "verified": {
+        "role": "tertiary",
+        "displayName": "Verde liquen",
+        "canonical": "oklch(78.8% 0.099 137)",
+        "tonalRamp": [
+          "#050E02",
+          "#162C0C",
+          "#2A4C1A",
+          "#456E33",
+          "#669054",
+          "#88B476",
+          "#B0D6A1",
+          "#DDF8D2"
+        ]
+      },
+      "partial": {
+        "role": "tertiary",
+        "displayName": "Amarillo paja",
+        "canonical": "oklch(83.0% 0.116 88)",
+        "tonalRamp": [
+          "#120900",
+          "#332200",
+          "#593D00",
+          "#7D5C00",
+          "#9F7D1B",
+          "#C3A046",
+          "#E4C67D",
+          "#FFEDBB"
+        ]
+      },
+      "pending": {
+        "role": "tertiary",
+        "displayName": "Óxido",
+        "canonical": "oklch(64.1% 0.153 34)",
+        "tonalRamp": [
+          "#1D0200",
+          "#490B00",
+          "#7A1801",
+          "#A6351C",
+          "#CD5940",
+          "#F57D62",
+          "#FFA990",
+          "#FFDAC7"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Sólo el nombre del proyecto en la portada."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Título de cada diapositiva en SlideShell."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Nombres de nodos, ámbitos y problemas (52–68 px)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Explicación principal en Literata (31–34 px)."
+      },
+      "body-soft": {
+        "displayName": "Body soft",
+        "purpose": "Evidencia, notas y fuentes en hueso apagado (26–29 px)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Bytes, tipos de mensaje, operaciones y estados en JetBrains Mono."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-arrive",
+        "value": "Easing.out(Easing.exp) ≈ cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Única curva de entrada; 24–30 fotogramas por defecto."
+      },
+      {
+        "name": "rise",
+        "value": "opacity 0→1, translateY 22px→0, 26 frames",
+        "purpose": "Entrada de bloques (Rise)."
+      },
+      {
+        "name": "frame-arrival",
+        "value": "relleno ámbar 2px en 16 frames, enfriado a 0 en 24, contenido aterriza 14px",
+        "purpose": "Llegada de filas (FrameRow)."
+      },
+      {
+        "name": "stagger",
+        "value": "10–12 frames",
+        "purpose": "Escalón entre elementos hermanos."
+      },
+      {
+        "name": "typing",
+        "value": "60–150 caracteres/s, cursor ▍ ámbar parpadeo cada 15 frames",
+        "purpose": "Escritura de JSON."
+      },
+      {
+        "name": "slide",
+        "value": "210 frames a 30 fps (7 s), termina en reposo",
+        "purpose": "Duración de cada clip."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "canvas",
+        "value": "1920x1080 fijo"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Running Head",
+      "kind": "nav",
+      "refersTo": "running-head",
+      "description": "Cabecera de trama de cada diapositiva: prefijo de longitud, type y posición.",
+      "html": "<div class=\"ds-head\"><span class=\"ds-lp\"><i>00</i><i>00</i><b>01</b><b>DA</b></span><span>\"type\":<em>\"avance.arquitectura\"</em></span><span class=\"ds-pos\">3 / 8</span></div>",
+      "css": ".ds-head{display:flex;align-items:baseline;gap:32px;font-family:'JetBrains Mono', ui-monospace, monospace;font-size:20px;color:#B6B1A6;font-variant-numeric:tabular-nums;background:#0F1216;padding:24px 32px 18px;border-bottom:1px solid #2A3039;transition:border-color .4s cubic-bezier(.16,1,.3,1)} .ds-head:hover,.ds-head:focus-visible{border-bottom-color:#F2A33A;outline:none} .ds-lp{display:flex;gap:8px} .ds-lp i{font-style:normal;color:#8C887F} .ds-lp b{font-weight:400;color:#F2A33A} .ds-head em{font-style:normal;color:#E9E4D8} .ds-pos{margin-left:auto}"
+    },
+    {
+      "name": "Length Prefix (encajonado)",
+      "kind": "custom",
+      "refersTo": "length-prefix-boxed",
+      "description": "Cuatro bytes de longitud; nulos tenues, significativos en ámbar.",
+      "html": "<span class=\"ds-lpb\"><span>00</span><span>00</span><span class=\"on\">01</span><span class=\"on\">0F</span></span>",
+      "css": ".ds-lpb{display:inline-flex;gap:12px;font-family:'JetBrains Mono', ui-monospace, monospace;font-size:28px;font-variant-numeric:tabular-nums;background:#0F1216;padding:16px} .ds-lpb span{padding:6px 10px;border:1px solid #2A3039;color:#8C887F;border-radius:0;transition:border-color .3s,color .3s} .ds-lpb span.on{border-color:#F2A33A;color:#F2A33A} .ds-lpb:hover span{border-color:#F2A33A;color:#F2A33A}"
+    },
+    {
+      "name": "Frame Row",
+      "kind": "card",
+      "refersTo": "frame-row",
+      "description": "Fila que llega como trama: hilo gris con relleno ámbar transitorio.",
+      "html": "<div class=\"ds-row\" tabindex=\"0\"><span class=\"ds-part\">Protocolo y servidor</span><span class=\"ds-ev\">3 pruebas unitarias y 11 de integración</span></div>",
+      "css": ".ds-row{position:relative;display:grid;grid-template-columns:1fr 1.4fr;gap:24px;padding:14px 0;background:#0F1216;color:#E9E4D8;font-family:'Literata', Georgia, serif;border-top:1px solid #2A3039} .ds-row::before{content:'';position:absolute;top:-1px;left:0;height:2px;width:0;background:#F2A33A;transition:width .5s cubic-bezier(.16,1,.3,1),opacity .8s .5s} .ds-row:hover::before,.ds-row:focus-visible::before{width:100%} .ds-row:focus-visible{outline:none} .ds-part{font-size:22px} .ds-ev{font-size:18px;color:#B6B1A6;line-height:1.3}"
+    },
+    {
+      "name": "Status Mark",
+      "kind": "chip",
+      "refersTo": "status-mark",
+      "description": "Marca de evidencia: cuadrado lleno, medio o abierto con etiqueta mono.",
+      "html": "<div class=\"ds-status\"><span class=\"v\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 22 22\"><rect x=\"1.5\" y=\"1.5\" width=\"19\" height=\"19\" fill=\"none\" stroke=\"#9CC98A\" stroke-width=\"2\"/><rect x=\"5\" y=\"5\" width=\"12\" height=\"12\" fill=\"#9CC98A\"/></svg>Verificado</span><span class=\"p\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 22 22\"><rect x=\"1.5\" y=\"1.5\" width=\"19\" height=\"19\" fill=\"none\" stroke=\"#E7C36A\" stroke-width=\"2\"/><rect x=\"5\" y=\"5\" width=\"6\" height=\"12\" fill=\"#E7C36A\"/></svg>Parcial</span><span class=\"x\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 22 22\"><rect x=\"1.5\" y=\"1.5\" width=\"19\" height=\"19\" fill=\"none\" stroke=\"#D9644A\" stroke-width=\"2\"/></svg>Pendiente</span></div>",
+      "css": ".ds-status{display:flex;gap:32px;background:#0F1216;padding:16px;font-family:'JetBrains Mono', ui-monospace, monospace;font-size:18px} .ds-status span{display:flex;align-items:center;gap:12px;transition:opacity .2s} .ds-status .v{color:#9CC98A} .ds-status .p{color:#E7C36A} .ds-status .x{color:#D9644A} .ds-status:hover span{opacity:.6} .ds-status span:hover{opacity:1}"
+    },
+    {
+      "name": "Code Pane",
+      "kind": "card",
+      "refersTo": "code-pane",
+      "description": "JSON de la trama sobre la única superficie elevada, con hilo ámbar.",
+      "html": "<pre class=\"ds-code\" tabindex=\"0\">{\n  \"v\": 1,\n  \"kind\": \"request\",\n  \"type\": \"auth.login\"\n}<span class=\"ds-caret\">▍</span></pre>",
+      "css": ".ds-code{margin:0;padding:20px 24px;font-family:'JetBrains Mono', ui-monospace, monospace;font-size:16px;line-height:1.55;color:#B6B1A6;background:#161A20;border-top:1px solid #F2A33A;border-radius:0;transition:color .3s} .ds-code:hover,.ds-code:focus-visible{color:#E9E4D8;outline:none} .ds-caret{color:#F2A33A}"
+    },
+    {
+      "name": "Node Column",
+      "kind": "card",
+      "description": "Columna de diagrama con hilo en el color del lado y nombre en serif.",
+      "html": "<div class=\"ds-node\" tabindex=\"0\"><div class=\"ds-node-name\">Servidor</div><div>Kotlin · JVM 25</div><div>Docker Compose</div></div>",
+      "css": ".ds-node{width:260px;background:#0F1216;color:#B6B1A6;font-family:'Literata', Georgia, serif;font-size:18px;line-height:1.3;border-top:1px solid #7FB2D9;padding-top:18px;display:flex;flex-direction:column;gap:8px;transition:border-color .3s} .ds-node:hover,.ds-node:focus-visible{border-top-color:#E9E4D8;outline:none} .ds-node-name{font-family:'Instrument Serif', Georgia, serif;font-size:44px;line-height:1;color:#E9E4D8;margin-bottom:10px}"
+    },
+    {
+      "name": "Slide Headline",
+      "kind": "custom",
+      "description": "Titular de diapositiva en Instrument Serif, con acento itálico opcional en ámbar.",
+      "html": "<h1 class=\"ds-h1\">Asistencia sobre <em>TCP + TLS</em></h1>",
+      "css": ".ds-h1{margin:0;padding:16px;background:#0F1216;color:#E9E4D8;font-family:'Instrument Serif', Georgia, serif;font-weight:400;font-size:64px;line-height:1;letter-spacing:-0.01em} .ds-h1 em{color:#F2A33A}"
+    }
+  ],
+  "narrative": {
+    "northStar": "La trama en pantalla",
+    "overview": "La presentación se comporta como el protocolo que describe. Cada diapositiva es una trama: arriba, la cabecera de 4 bytes con la longitud real del contenido serializado y su `\"type\"`; debajo, el contenido que se ensambla mientras los bytes llegan. El mundo es un terminal leído con ojos de editor: fondo grafito azulado, tinta color hueso, una serif de titular condensada y elegante, una serif de lectura sobria y monoespaciada sólo donde hay bytes, código o datos.\n\nLa densidad es de pizarra, no de documento: pocas ideas por pantalla, cuerpos grandes (26 px como mínimo en 1920×1080), márgenes de 120 px y mucho aire debajo del contenido. La estructura se dibuja con hilos de 1 px; no hay tarjetas, sombras, brillos ni esquinas redondeadas. El color es semántico antes que decorativo: ámbar es el cliente móvil y la trama en tránsito, azul acero es el servidor, y verde/amarillo/óxido son los tres estados de evidencia.\n\nEl movimiento cuenta la llegada de datos: los bytes de la cabecera cuentan hasta su valor, el hilo superior se extiende con la misma curva, las filas se encienden en ámbar y se enfrían a hilo gris al aterrizar. Todo usa una salida exponencial y descansa: el último fotograma de cada clip es la diapositiva en reposo.",
+    "keyCharacteristics": [
+      "Cabecera de trama en cada diapositiva: `00 00 01 DA  \"type\":\"avance.x\"  n / 8`.",
+      "Grafito + hueso, acentos sólo con significado (cliente, servidor, estado).",
+      "Tres familias con papeles estrictos: Instrument Serif (titulares), Literata (lectura), JetBrains Mono (bytes, código, datos).",
+      "Hilos de 1 px como única estructura; cero radios, cero sombras.",
+      "Animación de llegada con ease-out exponencial que siempre termina en reposo."
+    ],
+    "rules": [
+      {
+        "name": "The Color Means Something Rule",
+        "body": "Ámbar = cliente/trama, azul = servidor, verde/amarillo/óxido = verificado/parcial/pendiente. Ningún acento se usa sólo para adornar; si un elemento no es de un lado ni de un estado, va en tinta.",
+        "section": "colors"
+      },
+      {
+        "name": "The Faint Zero Rule",
+        "body": "En un prefijo de longitud, los bytes nulos iniciales van en hueso tenue y el ámbar empieza en el primer byte significativo.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is Evidence Rule",
+        "body": "JetBrains Mono sólo para bytes, JSON, nombres de mensaje, identificadores, rutas y etiquetas de estado. Prosa en mono es un error.",
+        "section": "typography"
+      },
+      {
+        "name": "The Italic Accent Rule",
+        "body": "La itálica de Instrument Serif en ámbar marca una sola frase clave por diapositiva como máximo (portada: \"TCP + TLS\"; cierre).",
+        "section": "typography"
+      },
+      {
+        "name": "The 26 px Floor Rule",
+        "body": "Nada en la diapositiva baja de 24 px a 1920×1080; el piso habitual es 26 px.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Structure Rule",
+        "body": "La estructura (separadores, carriles, hilos superiores de columna, bordes de byte) se dibuja con hilos de 1 px en `rule` o en el color semántico del lado. El trazo de 2 px queda reservado para la señal: mensajes y enlaces en diagramas, el contorno de la marca de estado y el relleno de llegada de una trama, que se enfría y desaparece.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** enmarcar toda diapositiva nueva con `SlideShell`, dándole un `type` `avance.<slug>` y los bytes reales de su contenido.",
+      "**Do** asignar ámbar al cliente y azul acero al servidor en cualquier diagrama, y verde/amarillo/óxido sólo a estados de evidencia.",
+      "**Do** dibujar estructura con hilos de 1 px, reservar 2 px para mensajes y señales, y mantener el margen de 120 px.",
+      "**Do** usar `ease` (salida exponencial) para toda entrada y dejar que el clip termine en reposo.",
+      "**Do** dibujar marcas, flechas y paquetes en SVG."
+    ],
+    "donts": [
+      "**Don't** usar tarjetas con fondo, sombras, brillos, degradados ni esquinas redondeadas.",
+      "**Don't** escribir prosa en JetBrains Mono ni bytes o código en serif.",
+      "**Don't** usar un acento como decoración sin su significado de lado o estado.",
+      "**Don't** volver a la plantilla de título + viñetas + tarjetas iguales.",
+      "**Don't** asumir que la app móvil sigue este sistema; hoy no lo hace."
+    ]
+  }
+}
