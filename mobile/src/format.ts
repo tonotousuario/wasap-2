@@ -7,21 +7,29 @@ const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 
 const pad = (value: number) => String(value).padStart(2, '0');
 
 /** Fecha local del dispositivo como AAAA-MM-DD (formato que espera el servidor). */
-export function isoDate(date: Date) {
+export function isoDate(date: Date, timezone?: string) {
+  if (timezone) {
+    const parts = new Intl.DateTimeFormat('en', {timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(date);
+    const part = (name: string) => parts.find(value => value.type === name)!.value;
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  }
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
-export function clock(instant: string) {
+export function clock(instant: string, timezone?: string) {
   const date = new Date(instant);
+  if (timezone) return new Intl.DateTimeFormat('en-GB', {timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).format(date);
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
-export function dayKey(instant: string) {
-  return isoDate(new Date(instant));
+export function dayKey(instant: string, timezone?: string) {
+  return isoDate(new Date(instant), timezone);
 }
+const calendarDate = (calendar: Date | string) => typeof calendar === 'string' ? new Date(`${calendar}T12:00:00`) : calendar;
 function shiftDays(date: Date, days: number) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
 /** «Hoy», «Ayer» o «lunes 9 de noviembre» (con año si no es el actual). */
-export function dayLabel(key: string, now: Date) {
+export function dayLabel(key: string, calendar: Date | string) {
+  const now = calendarDate(calendar);
   if (key === isoDate(now)) return 'Hoy';
   if (key === isoDate(shiftDays(now, -1))) return 'Ayer';
   const [year, month, day] = key.split('-').map(Number);
@@ -38,16 +46,16 @@ export function listTime(instant: string, now: Date) {
   return `${day}/${month}/${year.slice(2)}`;
 }
 /** «hoy 07:02», «ayer 13:40» o «9 de noviembre, 13:40». */
-export function momentLabel(instant: string, now: Date) {
-  const key = dayKey(instant);
+export function momentLabel(instant: string, now: Date | string, timezone?: string) {
+  const key = dayKey(instant, timezone);
   const label = dayLabel(key, now);
-  if (label === 'Hoy' || label === 'Ayer') return `${label.toLowerCase()} ${clock(instant)}`;
-  return `${label.replace(/^\S+ /, '')}, ${clock(instant)}`;
+  if (label === 'Hoy' || label === 'Ayer') return `${label.toLowerCase()} ${clock(instant, timezone)}`;
+  return `${label.replace(/^\S+ /, '')}, ${clock(instant, timezone)}`;
 }
-export function groupByDay<T>(items: T[], instant: (item: T) => string) {
+export function groupByDay<T>(items: T[], instant: (item: T) => string, timezone?: string) {
   const groups: {key: string; items: T[]}[] = [];
   for (const item of items) {
-    const key = dayKey(instant(item));
+    const key = dayKey(instant(item), timezone);
     const last = groups[groups.length - 1];
     if (last && last.key === key) last.items.push(item);
     else groups.push({key, items: [item]});
@@ -56,8 +64,9 @@ export function groupByDay<T>(items: T[], instant: (item: T) => string) {
 }
 
 export type RangePreset = 'all' | 'today' | 'week' | 'month';
-export function presetRange(preset: RangePreset, now: Date): {from?: string; to?: string} {
+export function presetRange(preset: RangePreset, calendar: Date | string): {from?: string; to?: string} {
   if (preset === 'all') return {};
+  const now = calendarDate(calendar);
   const to = isoDate(now);
   if (preset === 'today') return {from: to, to};
   if (preset === 'week') return {from: isoDate(shiftDays(now, -6)), to};
@@ -99,11 +108,12 @@ export function initials(name: string) {
 }
 
 /**
- * Nombre visible de una conversación. En un privado el servidor solo envía
- * «Privado»; usamos a la otra persona si la conocemos (integrantes o mensajes).
+ * El servidor identifica al destinatario. Los servidores anteriores pueden
+ * resolverlo con los integrantes o los mensajes ya recibidos.
  */
 export function conversationTitle(conversation: Conversation, peerName: string | undefined, messages: Message[], ownId: string | undefined) {
   if (conversation.kind !== 'DIRECT') return conversation.name;
+  if (conversation.peer) return conversation.peer.name;
   if (peerName) return peerName;
   for (let index = messages.length - 1; index >= 0; index--) {
     if (messages[index].senderId !== ownId) return messages[index].senderName;

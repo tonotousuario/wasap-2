@@ -81,6 +81,11 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             throw ApiError("FORBIDDEN", "No perteneces a esta conversación")
         return row
     }
+    private fun withPeer(c: Connection, uid: String, row: JsonObject): JsonObject {
+        if (row.string("kind") != "DIRECT") return row
+        val peer = c.rows("SELECT u.id::text,u.matricula,u.name FROM users u JOIN conversation_members cm ON cm.user_id=u.id WHERE cm.conversation_id=?::uuid AND u.id<>?::uuid", row.string("id"), uid).single()
+        return JsonObject(row + ("peer" to peer))
+    }
     fun canAccess(uid: String, cid: String): Boolean = try { db.transaction { conversation(it, uid, cid); true } } catch (_: ApiError) { false }
     fun withConversationAccess(uid: String, cid: String, action: () -> Unit): Boolean {
         return try { db.transaction { c -> conversation(c, uid, cid, shared = true); action(); true } } catch (_: ApiError) { false }
@@ -93,7 +98,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val q = p.optional("query")?.take(120) ?: ""
             obj("users" to c.rows("SELECT $userColumns FROM users WHERE strpos(lower(matricula), lower(?))>0 OR strpos(lower(name), lower(?))>0 ORDER BY matricula LIMIT 100", q, q))
         }
-        "attendance.state" -> lastEvent(c, uid).let { obj("lastEvent" to it, "nextType" to nextType(it)) }
+        "attendance.state" -> lastEvent(c, uid).let { obj("lastEvent" to it, "nextType" to nextType(it), "timezone" to zone.id, "today" to LocalDate.now(zone).toString()) }
         "attendance.mark" -> {
             if (!p.containsKey("expectedLastEventId")) invalid("Se requiere expectedLastEventId")
             val previous = lastEvent(c, uid)
@@ -111,8 +116,13 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
                 WHERE (c.kind='GENERAL' OR EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id=c.id AND cm.user_id=?::uuid))
                 AND (?::uuid IS NULL OR c.id>?::uuid) ORDER BY c.id LIMIT ?
             """, uid, after, after, limit + 1)
-            val page = items.take(limit)
-            obj("conversations" to page, "nextCursor" to if (items.size > limit) page.last().string("id") else null)
+            var bytes = 0
+            // ponytail: at most 100 peer lookups per page; batch if directory latency becomes a problem.
+            val page = items.take(limit).map { withPeer(c, uid, it) }.takeWhile { item ->
+                bytes += item.toString().toByteArray(Charsets.UTF_8).size + 1
+                bytes <= 48000
+            }
+            obj("conversations" to page, "nextCursor" to if (items.size > page.size) page.last().string("id") else null)
         }
         "conversations.direct" -> {
             val peer = user(c, p.string("matricula")).string("id")
@@ -123,7 +133,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
                 ON CONFLICT (direct_key) DO UPDATE SET direct_key=EXCLUDED.direct_key RETURNING id::text
             """, UUID.randomUUID().toString(), key).single().string("id")
             listOf(uid, peer).forEach { c.exec("INSERT INTO conversation_members(conversation_id,user_id) VALUES (?::uuid,?::uuid) ON CONFLICT DO NOTHING", cid, it) }
-            obj("conversation" to conversation(c, uid, cid))
+            obj("conversation" to withPeer(c, uid, conversation(c, uid, cid)))
         }
         "groups.create" -> {
             val name = text(p.string("name"), 80, "Nombre del grupo")

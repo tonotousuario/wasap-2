@@ -40,3 +40,18 @@
   image's runtime verification is pending.
 - Cleanup verified: parent stopped only wasap-smoke-server and wasap-test-pg.
 - No commits, merges, pushes, cloud builds or publication were performed.
+
+## Actualización — 14 de noviembre de 2026
+
+El texto anterior es un registro histórico. El proyecto ya está integrado en
+main y tiene commits. La evidencia actual se concentra en
+[verification.md](verification.md), con capturas reales y pendientes explícitos.
+
+- Backend añade peer en privados y timezone/today en asistencia.
+- Cliente usa el calendario del servidor y conserva compatibilidad anterior.
+- Última ejecución de implementación: 40 pruebas móviles, typecheck y 16 pruebas
+  de servidor aprobadas.
+- Compose local incorpora PostgreSQL persistente y servidor; el healthcheck de
+  la imagen final desplegada pasó.
+- Dentro/Fuera con historial se verificaron mediante dos marcas autorizadas.
+- No hay aprobación visual global ni verificación iPhone/dos dispositivos.

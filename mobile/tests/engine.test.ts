@@ -117,6 +117,29 @@ test('attendance events and delayed state responses cannot roll back a newer seq
   release(state('2','EXIT'));await reading;
   assert.equal(t.engine.state.attendance?.lastEvent?.seq,'3');assert.equal(t.engine.state.attendance?.nextType,'EXIT');
 });
+test('attendance calendar refreshes without a new movement before choosing a date preset',async()=>{
+  const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
+  const event={id:'a1',seq:'1',type:'ENTRY',recordedAt:'2026-11-13T15:00:00Z'};
+  let today='2026-11-13';
+  const base=t.setHandler(async(type,payload)=>type==='attendance.state'?{lastEvent:event,nextType:'EXIT',timezone:'America/Mexico_City',today}:base(type,payload));
+  await t.engine.refreshAttendance();
+  today='2026-11-14';
+  await t.engine.loadAttendancePreset('today');
+  assert.equal(t.engine.state.attendance?.today,'2026-11-14');
+  assert.equal(t.engine.state.attendance?.timezone,'America/Mexico_City');
+  assert.deepEqual(t.calls.filter(call=>call.type==='attendance.list').at(-1)?.payload,{limit:50,from:'2026-11-14',to:'2026-11-14'});
+});
+test('a delayed calendar query cannot replace a newer custom attendance range',async()=>{
+  const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
+  let release:(state:any)=>void=()=>{};
+  const delayed=new Promise(resolve=>{release=resolve;});
+  const base=t.setHandler(async(type,payload)=>type==='attendance.state'?delayed:base(type,payload));
+  const selecting=t.engine.loadAttendancePreset('today');
+  await t.engine.loadAttendance(false,{from:'2026-10-01',to:'2026-10-31'});
+  release({lastEvent:null,nextType:'ENTRY',timezone:'America/Mexico_City',today:'2026-11-14'});
+  await selecting;
+  assert.deepEqual(t.engine.state.attendanceFilters,{from:'2026-10-01',to:'2026-10-31'});
+});
 test('active socket auth expiry prompts login, deletes token, preserves same-user pending UUID for resume',async()=>{
   const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
   const base=t.setHandler(async(type,payload)=>{

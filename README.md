@@ -8,6 +8,19 @@ Incluye entrada/salida alternada sin límite diario, historial personal, chat
 general, privados, grupos y administración por consola. La secuencia de asistencia
 continúa entre días. Reintentar una operación confirmada no crea otro registro.
 
+## Documentación y evidencia
+
+- [Arquitectura y recorridos](docs/architecture.md): diagramas de componentes, red local, confirmación y estados.
+- [Capturas y verificación](docs/verification.md): imágenes reales de Android, resultados y pendientes.
+- [Protocolo TCP/TLS](docs/protocol.md): tramas, operaciones, permisos y recuperación.
+- [Entorno local con Compose](docs/local-runtime.md): PostgreSQL persistente y servidor.
+- [Guía móvil](mobile/README.md): emulador por CLI, Android, Xcode y EAS.
+- [Necesidades de backend](docs/mobile-backend-needs.md): cambios completados y opciones futuras.
+
+## Base y servidor locales con Compose
+
+Para desarrollo, [la guía local](docs/local-runtime.md#postgresql-y-servidor-con-compose-recomendado) levanta PostgreSQL persistente y el servidor juntos con `compose.local.yaml`. En Podman utiliza también `compose.local.podman.yaml`. El archivo `compose.yaml` de la siguiente sección requiere una base externa.
+
 ## Servidor con Docker
 
 Necesitas Docker con Compose, OpenSSL y una base PostgreSQL (17 o posterior) ya
@@ -46,6 +59,8 @@ El certificado público `certs/ca.crt` se incorpora a la compilación móvil. Gu
 el script con la misma CA y reinicia el servidor; no hace falta cambiar la CA de la
 app. Si cambia la CA sí se necesita recompilar la app. Los certificados del servidor
 duran un año; el script permite renovarlos. No incluyas `certs/` ni `.env` en Git.
+
+Para probar desde Linux sin abrir Android Studio, sigue la [guía para iniciar el emulador por terminal](mobile/README.md#emulador-android-desde-la-terminal-sin-abrir-android-studio), con conexión al servidor local y Metro.
 
 ## Administración
 

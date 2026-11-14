@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {classifyConnectFailure, ConnectError, errorCode} from '../src/errors.ts';
 import {ProtocolError} from '../src/state.ts';
-import {conversationTitle, customRange, dayLabel, explainError, groupByDay, isoDate, linkState, maskDate, parseDisplayDate, presetRange, previewText, sortConversations} from '../src/format.ts';
+import {clock, conversationTitle, customRange, dayLabel, explainError, groupByDay, isoDate, linkState, maskDate, parseDisplayDate, presetRange, previewText, sortConversations} from '../src/format.ts';
 import type {Conversation, Message} from '../src/types.ts';
 
 const now = new Date(2026, 10, 13, 9, 30);
@@ -43,6 +43,12 @@ test('date presets produce inclusive server ranges from the device date', () => 
   assert.deepEqual(presetRange('week', new Date(2026, 0, 3)), {from: '2025-12-28', to: '2026-01-03'});
 });
 
+test('date presets use the server calendar date across year and month boundaries', () => {
+  assert.deepEqual(presetRange('today', '2026-01-01'), {from: '2026-01-01', to: '2026-01-01'});
+  assert.deepEqual(presetRange('week', '2026-01-03'), {from: '2025-12-28', to: '2026-01-03'});
+  assert.deepEqual(presetRange('month', '2026-01-01'), {from: '2026-01-01', to: '2026-01-01'});
+});
+
 test('hand-typed ranges accept day/month/year and reject impossible or inverted dates', () => {
   assert.equal(maskDate('13112026'), '13/11/2026');
   assert.equal(maskDate('1311'), '13/11');
@@ -64,8 +70,18 @@ test('history groups by local day with Hoy/Ayer labels and keeps server order', 
   assert.equal(dayLabel(isoDate(new Date(2026, 10, 9)), now), 'lunes 9 de noviembre');
 });
 
+test('attendance times and day groups follow the server zone near midnight', () => {
+  const events = ['2026-11-14T06:00:00Z', '2026-11-14T05:59:00Z'];
+  const groups = groupByDay(events, value => value, 'America/Mexico_City');
+  assert.deepEqual(groups.map(group => group.key), ['2026-11-14', '2026-11-13']);
+  assert.deepEqual(groupByDay(events, value => value, 'UTC').map(group => group.key), ['2026-11-14']);
+  assert.deepEqual(groups.map(group => dayLabel(group.key, '2026-11-14')), ['Hoy', 'Ayer']);
+  assert.equal(clock(events[1], 'America/Mexico_City'), '23:59');
+});
+
 test('a private chat is titled with the other person, never just "Privado" when they are known', () => {
   const direct = conv('d1', 'DIRECT', 'Privado');
+  assert.equal(conversationTitle({...direct, peer: {id: 'u2', matricula: 'B001', name: 'Nombre actual'}}, 'Nombre anterior', [], 'me'), 'Nombre actual');
   const history = [msg('1', 'd1', 'me', 'Ana', at(2026, 11, 12)), msg('2', 'd1', 'u2', 'Luis Pérez', at(2026, 11, 12, 9))];
   assert.equal(conversationTitle(direct, 'Luis Pérez Soto', [], 'me'), 'Luis Pérez Soto');
   assert.equal(conversationTitle(direct, undefined, history, 'me'), 'Luis Pérez');

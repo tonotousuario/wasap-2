@@ -36,3 +36,32 @@ iOS native compilation cannot run on this Linux host: macOS/Xcode/CocoaPods/devi
 `npm audit --omit=dev` with the network-enabled registry reported three moderate affected packages: `minimatch`, `@expo/fingerprint`, and `expo`, through [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249). npm's automated fix proposed downgrading to Expo 52; no incompatible forced downgrade was applied. A later offline lockfile-only install printed zero vulnerabilities because it had no fresh registry audit; that does not supersede the actual network audit finding.
 
 Context7 was searched for at implementation start but was unavailable then. Installed package sources and official Expo/Android/Apple documentation were used as the permitted fallback. Server integration/build results belong to the parent/server agent and are not inferred from these mobile checks.
+
+## Verificación posterior — 14 de noviembre de 2026
+
+Este apartado aporta evidencia posterior a los intentos de compilación anteriores;
+las limitaciones de esos intentos no describen la app Android instalada hoy.
+
+Se abrió el build existente de WASAP en emulator-5554, se cargó el código actual
+con Metro y se conectó al servidor TCP/TLS local mediante adb reverse.
+Se observó el aviso de sesión vencida tras reiniciar el servidor y se inició
+sesión como DEMO002. Con autorización del usuario se registró una entrada y una
+salida: 2026-11-14T19:34:06.997118Z y 2026-11-14T19:34:30.595020Z.
+La consulta administrativa confirmó exactamente esos dos movimientos para la
+cuenta. Se capturaron Dentro, Fuera, confirmación e historial.
+
+Capturas versionadas: [Dentro](images/android-attendance-inside.png) y [Fuera](images/android-attendance-outside.png). Revisión
+independiente: Dentro/Fuera resueltos visualmente; chips legibles y selección
+visible. El selector de fechas desborda hacia un carril horizontal; no se probó
+su interacción en esta pasada. No hay aprobación global de diseño.
+
+Siguen sin verificarse en esta pasada: burbuja pendiente y recuperación tras
+corte durante envío, pantalla de integrantes, texto ampliado, iPhone, tema
+oscuro y entrega simultánea en dos dispositivos. Icono/splash y animaciones
+propias siguen pendientes. No se realizaron pruebas negativas de TLS.
+
+Se validó app.config.ts con expo config usando la CA pública local: conserva
+plugins TLS, permisos e identificadores; supportsTablet:false está versionado.
+Impeccable doctor con target mobile/src/App.tsx devolvió findings vacío.
+La suite actual pasa 40 pruebas móviles y typecheck; el servidor pasa 3 pruebas
+unitarias y 13 de integración en PostgreSQL desechable.

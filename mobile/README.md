@@ -41,6 +41,87 @@ cd android
 
 Mantén `WASAP_CA_PEM` exportado también durante Gradle/Metro. El APK debug está en `android/app/build/outputs/apk/debug/`. El build de desarrollo necesita Metro (`npm start`). Un build de distribución incorpora su propio bundle.
 
+## Emulador Android desde la terminal (sin abrir Android Studio)
+
+Estos pasos usan Bash en Linux y un AVD ya creado, como el utilizado en las pruebas.
+Android Studio puede permanecer cerrado; necesitas el SDK, Android Emulator y la
+imagen del AVD instalados. En cada terminal configura las rutas (ajusta la del SDK
+si lo instalaste en otro lugar):
+
+```sh
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+emulator -list-avds
+```
+
+En una primera terminal inicia uno de los nombres que devuelve la lista:
+
+```sh
+emulator -avd Medium_Phone_API_37.0
+```
+
+Conserva esa terminal abierta. En una segunda terminal comprueba el dispositivo
+y espera a que termine de arrancar:
+
+```sh
+adb devices
+adb -s emulator-5554 wait-for-device
+adb -s emulator-5554 shell getprop sys.boot_completed
+```
+
+El último comando debe devolver `1`; si todavía no lo hace, espera y repítelo.
+Sustituye `emulator-5554` por el identificador que muestre `adb devices` si cambia.
+
+### Usar la app ya instalada y el servidor local
+
+Si usas los contenedores locales descritos en [la guía del servidor](../docs/local-runtime.md),
+inícialos desde la raíz del repositorio:
+
+```sh
+podman compose -f compose.local.yaml -f compose.local.podman.yaml up -d
+adb -s emulator-5554 reverse tcp:5050 tcp:5050
+adb -s emulator-5554 reverse tcp:8081 tcp:8081
+adb -s emulator-5554 reverse --list
+```
+
+En WASAP configura **127.0.0.1**, puerto **5050**. El reenvío hace que ese puerto
+del emulador llegue al servidor del equipo. El certificado del servidor debe
+incluir `127.0.0.1` en su SAN y estar firmado por la CA incorporada a la app.
+Repite los reenvíos si reinicias o reconectas el emulador. Esta ruta evita depender
+de la IP LAN; no necesitas regenerar el certificado cada vez que cambia el Wi-Fi.
+
+Desde la raíz del repositorio, en otra terminal:
+
+```sh
+cd mobile
+export WASAP_CA_PEM="$(cat ../certs/ca.crt)"
+npm start -- --localhost
+```
+
+Abre WASAP en el emulador y selecciona el servidor de desarrollo de Metro.
+El puerto 8081 sirve el JavaScript de desarrollo; 5050 es la conexión TCP/TLS de
+WASAP. Si falta el binario de la app o cambiaste dependencias nativas, usa el
+procedimiento de [compilación local Android](#compilación-local-android).
+Para cambios de interfaz basta con Metro y recargar la app.
+
+### Apagar y resolver problemas de arranque
+
+```sh
+adb -s emulator-5554 emu kill
+```
+
+Si el AVD no restaura correctamente su sesión, vuelve a iniciarlo con
+`emulator -avd Medium_Phone_API_37.0 -no-snapshot-load`. Esto arranca sin cargar
+el snapshot y conserva los datos. Evita `-wipe-data`: borra las aplicaciones y
+datos del AVD. Si la lista de AVD está vacía, primero debes crear uno; las
+herramientas de consola para ello son `sdkmanager` y `avdmanager`, disponibles
+en Android SDK Command-line Tools. En Linux la aceleración requiere KVM;
+puedes revisar su disponibilidad con `emulator -accel-check`.
+
+Referencias: [inicio del emulador por CLI](https://developer.android.com/studio/run/emulator-commandline)
+y [ADB](https://developer.android.com/tools/adb). Esta guía usa los ejecutables
+del SDK instalado; la documentación actual también presenta la nueva Android CLI.
+
 ## macOS / Xcode, sin compilación en la nube
 
 Instala Xcode con sus herramientas de línea de comandos, un simulador iOS y CocoaPods. Conserva `WASAP_CA_PEM` en el entorno de la terminal.
@@ -138,3 +219,7 @@ Las pruebas ejecutan encuadre/UTF-8, correlación de solicitudes, errores/descon
 El análisis `npm audit --omit=dev` del 12 de noviembre de 2026 detectó tres paquetes afectados por el aviso moderado [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249): `minimatch` y sus dependientes `@expo/fingerprint`/`expo`. Está en herramientas de fingerprint/build; la solución automática propone degradar a Expo 52. No se aplicó ese cambio incompatible. Revisa el aviso y las actualizaciones de Expo antes de distribuir.
 
 Referencias primarias: [development builds](https://docs.expo.dev/develop/development-builds/introduction/), [SecureStore](https://docs.expo.dev/versions/latest/sdk/securestore/), [config plugins](https://docs.expo.dev/config-plugins/plugins/), [seguridad TLS en Android](https://developer.android.com/privacy-and-security/security-ssl) y [biblioteca TCP](https://github.com/Rapsssito/react-native-tcp-socket).
+
+Comprobación posterior (14 de noviembre): estados Dentro y Fuera con historial y aviso de sesión vencida observados en Android; véase [la evidencia actualizada](../docs/mobile-report.md#verificación-posterior--14-de-noviembre-de-2026). Esto amplía las comprobaciones anteriores y no implica aprobación global del diseño.
+
+Consulta [las capturas y el estado de verificación](../docs/verification.md) y [los diagramas de arquitectura](../docs/architecture.md).

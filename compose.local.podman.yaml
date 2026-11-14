@@ -1,0 +1,4 @@
+# Rootless Podman: let the application read the operator's private 0600 files.
+services:
+  server:
+    userns_mode: keep-id

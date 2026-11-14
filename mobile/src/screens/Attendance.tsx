@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {RefreshControl, ScrollView, Text, View} from 'react-native';
 import {engine} from '../native';
-import {clock, customRange, dayLabel, displayDate, explainError, groupByDay, maskDate, momentLabel, presetRange, type RangePreset} from '../format';
+import {clock, customRange, dayLabel, displayDate, explainError, groupByDay, maskDate, momentLabel, type RangePreset} from '../format';
 import type {AttendanceEvent} from '../types';
 import {run, useEngine} from '../ui/app';
 import {Button, Chip, Empty, Field, Icon, Notice, SectionTitle, SkeletonRows, Seal, type IconName} from '../ui/kit';
@@ -13,10 +13,11 @@ type Outcome = {ok: true; event: AttendanceEvent} | {ok: false; title: string; b
 export function Attendance() {
   const state = useEngine();
   const {c} = useTheme();
-  const now = new Date();
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [marking, setMarking] = useState(false);
   const attendance = state.attendance;
+  const now = attendance?.today ?? new Date();
+  const timezone = attendance?.timezone;
   const last = attendance?.lastEvent ?? null;
   const next = attendance?.nextType;
   const awaitingMark = state.pending && state.pendingType === 'attendance.mark';
@@ -42,7 +43,7 @@ export function Attendance() {
     ? {icon: 'unknown', word: 'Sin datos', line: state.online ? 'Consultando tu estado en el servidor…' : 'No hemos podido consultar tu estado. No asumimos que estés fuera.'}
     : !last
       ? {icon: 'attendance', word: 'Sin registros', line: 'Todavía no has registrado tu primera entrada.'}
-      : {icon: inside ? 'enter' : 'exit', word: inside ? 'Dentro' : 'Fuera', line: `${NAME[last.type]} · ${momentLabel(last.recordedAt, now)}`};
+      : {icon: inside ? 'enter' : 'exit', word: inside ? 'Dentro' : 'Fuera', line: `${NAME[last.type]} · ${momentLabel(last.recordedAt, now, timezone)}`};
   // El verde profundo queda para la barra y la acción; el estado usa una superficie tonal.
   const confirmedInside = !!attendance && !!last && inside;
   const heroBg = !attendance ? 'transparent' : confirmedInside ? c.primarySoft : c.neutralSoft;
@@ -72,7 +73,7 @@ export function Attendance() {
         </View>
       )}
 
-      {outcome?.ok && <Notice tone="ok" icon="check" title={`${NAME[outcome.event.type]} registrada a las ${clock(outcome.event.recordedAt)}`} body="Confirmado por el servidor." onClose={() => setOutcome(null)} />}
+      {outcome?.ok && <Notice tone="ok" icon="check" title={`${NAME[outcome.event.type]} registrada a las ${clock(outcome.event.recordedAt, timezone)}`} body="Confirmado por el servidor." onClose={() => setOutcome(null)} />}
       {outcome && !outcome.ok && <Notice tone="error" title="No registrado" body={`${outcome.title}. ${outcome.body}`} onClose={() => setOutcome(null)} />}
 
       {/* Sin ningún registro todavía, el bloque de estado ya lo dice todo. */}
@@ -86,7 +87,8 @@ const PRESETS: {id: RangePreset; label: string}[] = [{id: 'all', label: 'Todo'},
 function History() {
   const state = useEngine();
   const {c} = useTheme();
-  const now = new Date();
+  const now = state.attendance?.today ?? new Date();
+  const timezone = state.attendance?.timezone;
   const active = state.attendanceFilters;
   const [choice, setChoice] = useState<RangePreset | 'custom'>(active.from || active.to ? 'custom' : 'all');
   const [from, setFrom] = useState(active.from ? displayDate(active.from) : '');
@@ -102,7 +104,7 @@ function History() {
   const pick = (preset: RangePreset) => {
     setChoice(preset);
     setProblem('');
-    void load(engine.loadAttendance(false, presetRange(preset, new Date())));
+    void load(engine.loadAttendancePreset(preset));
   };
   const applyCustom = () => {
     const range = customRange(from, to);
@@ -111,7 +113,7 @@ function History() {
     void load(engine.loadAttendance(false, range.filters));
   };
   const summary = active.from && active.to ? (active.from === active.to ? `Solo el ${displayDate(active.from)}` : `Del ${displayDate(active.from)} al ${displayDate(active.to)}`) : active.from ? `Desde el ${displayDate(active.from)}` : active.to ? `Hasta el ${displayDate(active.to)}` : '';
-  const groups = groupByDay(state.events, event => event.recordedAt);
+  const groups = groupByDay(state.events, event => event.recordedAt, timezone);
   const firstLoad = !state.attendance && state.busy && !state.events.length;
 
   return (
@@ -143,10 +145,10 @@ function History() {
           <View key={group.key} style={{gap: 2}}>
             <Text accessibilityRole="header" style={[type.small, {color: c.textSoft, fontWeight: '600', paddingTop: space.sm, paddingBottom: space.xs}]}>{dayLabel(group.key, now).replace(/^./, letter => letter.toUpperCase())}</Text>
             {group.items.map((event, index) => (
-              <View key={event.id} accessible accessibilityLabel={`${NAME[event.type]} a las ${clock(event.recordedAt)}`} style={{flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 48, borderTopWidth: index ? 1 : 0, borderColor: c.line}}>
+              <View key={event.id} accessible accessibilityLabel={`${NAME[event.type]} a las ${clock(event.recordedAt, timezone)}`} style={{flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 48, borderTopWidth: index ? 1 : 0, borderColor: c.line}}>
                 <Icon name={event.type === 'ENTRY' ? 'enter' : 'exit'} size={22} color={event.type === 'ENTRY' ? c.primary : c.textSoft} />
                 <Text style={[type.body, {color: c.text, flex: 1}]}>{NAME[event.type]}</Text>
-                <Text style={[type.body, {color: c.text, fontVariant: ['tabular-nums']}]}>{clock(event.recordedAt)}</Text>
+                <Text style={[type.body, {color: c.text, fontVariant: ['tabular-nums']}]}>{clock(event.recordedAt, timezone)}</Text>
               </View>
             ))}
           </View>

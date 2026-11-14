@@ -2,6 +2,7 @@ import type {Envelope} from './protocol.ts';
 import {PendingMutation,ProtocolError,mergeMessages,compareSeq,type Storage} from './state.ts';
 import type {Server,Session,Message,AttendanceState,AttendanceEvent,Conversation} from './types.ts';
 import {ConnectError,errorCode,errorDetail} from './errors.ts';
+import {presetRange,type RangePreset} from './format.ts';
 export type Connection={closed:boolean;request(type:string,payload:Record<string,unknown>,id:string):Promise<any>;close(error?:Error):void};
 export type Dependencies={storage:Storage;secure:Storage;uuid:()=>string;connect:(server:Server,event:(e:Envelope)=>void,close:(e:Error)=>void)=>Promise<Connection>};
 export type AttendanceFilters={from?:string;to?:string};
@@ -143,10 +144,16 @@ export class Engine {
   async refresh(){await this.refreshAttendance();await this.loadAttendance(false);await this.refreshConversations();}
   private applyAttendance(attendance:AttendanceState){
     const current=this.state.attendance?.lastEvent,next=attendance.lastEvent;
-    if(current&&(!next||compareSeq(next.seq,current.seq)<=0))return;
+    if(current&&(!next||compareSeq(next.seq,current.seq)<0))return;
     this.update({attendance});
   }
   async refreshAttendance(){const attendance=await this.query('attendance.state');this.applyAttendance(attendance);}
+  async loadAttendancePreset(preset:RangePreset){
+    const historyGeneration=++this.attendanceHistoryGeneration;
+    await this.refreshAttendance();
+    if(historyGeneration!==this.attendanceHistoryGeneration)return;
+    await this.loadAttendance(false,presetRange(preset,this.state.attendance?.today??new Date()));
+  }
   async loadAttendance(older=false,filters?:AttendanceFilters){
     if(!older){
       ++this.attendanceHistoryGeneration;

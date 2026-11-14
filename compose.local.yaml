@@ -1,0 +1,60 @@
+name: wasap-dev
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wasap
+      POSTGRES_USER: wasap
+      POSTGRES_PASSWORD_FILE: /run/wasap/db-password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./certs/db-password:/run/wasap/db-password:ro,z
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U wasap -d wasap"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  server:
+    build: .
+    image: localhost/wasap-server:dev
+    healthcheck:
+      test: [CMD, /app/bin/wasap-server, healthcheck]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    user: "${WASAP_UID:-1000}:${WASAP_GID:-1000}"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5050:5050"
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 5050
+      APP_TIMEZONE: America/Mexico_City
+      DB_URL: jdbc:postgresql://db:5432/wasap?sslmode=disable
+      DB_USER: wasap
+      DB_PASSWORD_FILE: /run/wasap/db-password
+      DB_ALLOW_INSECURE: "true"
+      TLS_KEYSTORE: /run/wasap/server.p12
+      TLS_KEYSTORE_PASSWORD_FILE: /run/wasap/keystore-password
+      TLS_CA_FILE: /run/wasap/ca.crt
+      JAVA_OPTS: -Xms64m -Xmx256m
+    volumes:
+      - ./certs/db-password:/run/wasap/db-password:ro,z
+      - ./certs/server.p12:/run/wasap/server.p12:ro,z
+      - ./certs/keystore-password:/run/wasap/keystore-password:ro,z
+      - ./certs/ca.crt:/run/wasap/ca.crt:ro,z
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  pgdata:
+    external: true
+    name: wasap-local-pgdata

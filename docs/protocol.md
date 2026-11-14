@@ -25,7 +25,7 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | auth.resume | `{token}` | `{token,expiresAt,user:{id,matricula,name}}` |
 | auth.logout | `{}` | `{}` |
 | users.list | `{query?:string}` | `{users:[{id,matricula,name}]}` (max 100) |
-| attendance.state | `{}` | `{lastEvent:Event|null,nextType:"ENTRY"|"EXIT"}` |
+| attendance.state | `{}` | `{lastEvent:Event|null,nextType:"ENTRY"|"EXIT",timezone?:string,today?:"YYYY-MM-DD"}` |
 | attendance.mark | `{expectedLastEventId:UUID|null}` | `{event:Event,nextType}` |
 | attendance.list | `{before?:string,limit?:number,from?:"YYYY-MM-DD",to?:"YYYY-MM-DD"}` | `{events:[Event],nextCursor:string|null}` |
 | conversations.list | `{after?:UUID,limit?:number}` | `{conversations:[Conversation],nextCursor:UUID|null}` (id ASC) |
@@ -38,7 +38,11 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | messages.send | `{conversationId,text}` | `{message:Message}` |
 
 `Event={id,seq,type:"ENTRY"|"EXIT",recordedAt}`.
-`Conversation={id,kind:"GENERAL"|"DIRECT"|"GROUP",name,ownerId:UUID|null,lastSeq:string}`.
+`Conversation={id,kind:"GENERAL"|"DIRECT"|"GROUP",name,ownerId:UUID|null,lastSeq:string,peer?:{id,matricula,name}}`.
+`peer` identifies the other member of a DIRECT conversation from the requesting
+user's perspective; it is absent for GENERAL and GROUP. It is returned by
+`conversations.list` and `conversations.direct`. Older stored mutation replies may
+omit it. `groups.members` also accepts a DIRECT conversation owned by the caller.
 `Message={id,conversationId,seq,senderId,senderName,text,createdAt}`.
 Attendance lists are newest first (`before` is exclusive seq); message lists are
 ascending, returning the most recent page when no cursor is provided, older pages
@@ -46,12 +50,16 @@ with `before`, and earliest unseen pages with `after`. Do not send both cursors.
 Limits default 50, maximum 100. `nextCursor` is the last pagination boundary when
 more rows remain (first seq for backwards pagination, last seq for forwards).
 Date filters are inclusive dates in APP_TIMEZONE (default America/Mexico_City).
-Message pages can be shorter than the requested limit to fit the byte budget;
+`attendance.state` supplies that IANA `timezone` and the server's current local
+`today` date. Refresh it before choosing relative date filters; no new attendance
+movement is needed for the calendar date to change. Clients of older servers may
+fall back to the device calendar when these optional fields are absent.
+Message and conversation pages can be shorter than the requested limit to fit the byte budget;
 always follow nextCursor. Messages contain 1–4000 UTF-16 code units after trimming.
 Groups contain at most 100 current members including their creator.
 
 `message.created` carries `{message:Message}`. `attendance.changed` carries
-`{lastEvent:Event,nextType}` only to that user's authenticated sockets.
+`{lastEvent:Event,nextType,timezone?:string,today?:"YYYY-MM-DD"}` only to that user's authenticated sockets.
 `conversations.changed` carries `{}` and means refresh conversation membership/list.
 Clients always query histories after reconnect, and deduplicate by record id/seq.
 

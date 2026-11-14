@@ -4,5 +4,8 @@
 **/build
 **/.gradle
 .env*
+.local
+.impeccable
+presentation
 certs
 mobile

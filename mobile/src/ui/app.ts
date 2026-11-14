@@ -33,9 +33,7 @@ export function useDebounced<T>(value: T, delay = 300) {
   return settled;
 }
 
-// Nombre de la otra persona en cada chat privado. El servidor titula todos
-// «Privado», así que se resuelve con la lista de integrantes y se recuerda
-// solo en memoria durante la sesión.
+// Compatibilidad con servidores sin Conversation.peer; solo en memoria.
 const peers = new Map<string, string>();
 const peerListeners = new Set<() => void>();
 const asked = new Set<string>();
@@ -55,7 +53,7 @@ export function forgetLocalData() {
 }
 export function usePeers(conversations: Conversation[], online: boolean) {
   useSyncExternalStore(listener => {peerListeners.add(listener); return () => {peerListeners.delete(listener);};}, () => peerVersion);
-  const missing = conversations.filter(c => c.kind === 'DIRECT' && !peers.has(c.id) && !asked.has(c.id)).map(c => c.id).join(',');
+  const missing = conversations.filter(c => c.kind === 'DIRECT' && !c.peer && !peers.has(c.id) && !asked.has(c.id)).map(c => c.id).join(',');
   useEffect(() => {
     if (!online || !missing) return;
     let cancelled = false;
