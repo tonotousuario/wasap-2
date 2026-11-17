@@ -1,7 +1,13 @@
 import type {ExpoConfig} from 'expo/config';
 import {X509Certificate} from 'node:crypto';
+import {existsSync, readFileSync} from 'node:fs';
+import {join} from 'node:path';
 
-const caPem = (process.env.WASAP_CA_PEM ?? '').replace(/\\n/g, '\n').trim();
+// WASAP_CA_PEM wins (EAS cloud builds); locally, fall back to the repository's public CA so
+// commands such as `eas device:create` work without exporting it first.
+const localCa = join(__dirname, '..', 'certs', 'ca.crt');
+const rawCa = process.env.WASAP_CA_PEM || (existsSync(localCa) ? readFileSync(localCa, 'utf8') : '');
+const caPem = rawCa.replace(/\\n/g, '\n').trim();
 if (!caPem || caPem.includes('PRIVATE KEY') || (caPem.match(/BEGIN CERTIFICATE/g) ?? []).length !== 1)
   throw new Error('WASAP_CA_PEM debe contener exactamente un certificado CA público PEM (sin claves privadas).');
 const certificate = new X509Certificate(caPem);
