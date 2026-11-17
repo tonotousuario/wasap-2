@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.4.21"
     application
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
 
 repositories { mavenCentral() }
@@ -18,6 +19,8 @@ dependencies {
 }
 
 kotlin { jvmToolchain(25) }
+// Formatting rules live in the repository .editorconfig.
+ktlint { version = "1.8.0" }
 application { mainClass.set("wasap.MainKt") }
 tasks.test { useJUnitPlatform { excludeTags("integration") } }
 tasks.register<Test>("integrationTest") {

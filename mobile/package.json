@@ -13,7 +13,9 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test --test-isolation=none tests/*.test.ts",
-    "postinstall": "node plugins/patch-tls.cjs"
+    "postinstall": "node plugins/patch-tls.cjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@expo/vector-icons": "15.0.2",
@@ -32,6 +34,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
+    "prettier": "3.10.1",
     "typescript": "~5.9.3"
   }
 }
