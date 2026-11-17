@@ -36,6 +36,36 @@ class Database(url: String, user: String, password: String, schema: String = "pu
     override fun close() = pool.close()
 }
 
+// SQLSTATE classes that may succeed on retry: connection (08), transaction rollback such as
+// serialization failure or deadlock (40), insufficient resources (53), operator intervention or
+// query cancellation (57).
+private val transientSqlStateClasses = setOf("08", "40", "53", "57")
+
+/** Database failures worth retrying with the same request id; anything else is deterministic. */
+fun isTransientDatabaseFailure(error: Throwable): Boolean = sqlExceptions(error).any { e ->
+    e is java.sql.SQLTransientException || e is java.sql.SQLRecoverableException ||
+        e.sqlState?.take(2) in transientSqlStateClasses
+}
+
+/** SQLSTATE class of the first database failure in the chain, safe to log (no message text). */
+fun sqlStateClass(error: Throwable): String? = sqlExceptions(error).firstNotNullOfOrNull { it.sqlState?.take(2) }
+
+private fun sqlExceptions(error: Throwable): List<java.sql.SQLException> {
+    val found = mutableListOf<java.sql.SQLException>()
+    val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
+    val pending = ArrayDeque<Throwable>().apply { add(error) }
+    while (pending.isNotEmpty()) {
+        val current = pending.removeFirst()
+        if (!seen.add(current)) continue
+        if (current is java.sql.SQLException) {
+            found += current
+            current.nextException?.let(pending::add)
+        }
+        current.cause?.let(pending::add)
+    }
+    return found
+}
+
 private fun Connection.statement(sql: String, params: Array<out Any?>) = prepareStatement(sql).also { s ->
     s.queryTimeout = 15
     params.forEachIndexed { i, value -> when (value) {

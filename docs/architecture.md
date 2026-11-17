@@ -86,8 +86,10 @@ resultado anterior siga sin resolverse.
 | GROUP | Integrantes actuales | El creador añade y retira miembros; no puede retirarse |
 
 Retirar a un integrante deniega nuevas consultas y entregas. El servidor vuelve
-a comprobar los permisos al escribir una trama protegida. El texto ya descargado
-no se puede retirar del teléfono.
+a comprobar los permisos justo antes de escribir una trama protegida, con una
+consulta breve que termina antes de escribir: ningún cliente lento retiene
+conexiones ni locks de la base. El texto ya descargado no se puede retirar del
+teléfono. El aviso `conversations.changed` llega solo a los integrantes afectados.
 
 ## Seguridad y límites
 

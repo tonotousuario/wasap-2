@@ -12,6 +12,17 @@ Malformed framing closes the socket. Semantic errors return an error response.
 Errors: VALIDATION, UNAUTHENTICATED, INVALID_CREDENTIALS, RATE_LIMITED, FORBIDDEN,
 NOT_FOUND, CONFLICT, REQUEST_ID_REUSED, INTERNAL, UNAVAILABLE, UNSUPPORTED_VERSION.
 
+Retry semantics for mutations. Only two codes mean the same request UUID may still
+succeed later; clients keep the pending mutation and resend it unchanged:
+- `UNAVAILABLE`: transient database failure (SQLSTATE class 08 connection, 40
+  serialization/deadlock, 53 insufficient resources, 57 cancellation/operator, or no
+  pooled connection in time). Nothing was committed.
+- `UNAUTHENTICATED`: sign in again as the same user, then resend.
+Every other error is final and the client discards the pending mutation. In particular
+`INTERNAL` covers deterministic failures (constraint violations, invalid data, bugs):
+nothing was committed and resending the same request would fail again. Error messages
+never include database text.
+
 ## Operations
 
 All payloads/results below are JSON objects. UUID strings identify users,
@@ -61,6 +72,9 @@ Groups contain at most 100 current members including their creator.
 `message.created` carries `{message:Message}`. `attendance.changed` carries
 `{lastEvent:Event,nextType,timezone?:string,today?:"YYYY-MM-DD"}` only to that user's authenticated sockets.
 `conversations.changed` carries `{}` and means refresh conversation membership/list.
+It is sent only to users affected by the operation: the members of the conversation
+after `conversations.direct` or a group mutation and, for `groups.remove`, the removed
+member.
 Clients always query histories after reconnect, and deduplicate by record id/seq.
 
 ## Guarantees
@@ -69,9 +83,18 @@ Identity always comes from the authenticated connection. Token sessions last 24h
 are held in server memory and cease to work after server restart. PINs are 6–12 ASCII
 digits, hashed with salted PBKDF2-HMAC-SHA256 (600000 iterations).
 
+The server confirms a session's credential version against the database at most once
+every 5 seconds per session (and always on `auth.resume`). After an administrator
+resets a PIN, sockets still authenticated with an older session stop being served
+within 5 seconds: their next request answers UNAUTHENTICATED and no further events
+are written to them. Restart the server if immediate revocation is required.
+
 For `attendance.mark`, `conversations.direct`, all group mutations, and
 `messages.send`, the request UUID is the durable operation key scoped to the user.
-Store the payload and result atomically with the effect. Retries with identical
+Store the payload and result atomically with the effect. These records are kept for
+`PROCESSED_REQUEST_RETENTION_DAYS` (30 by default) and purged hourly afterwards; a
+client must reconcile a pending mutation within that period, since a retry of a
+purged request would be applied again. Retries with identical
 request content return the original result; UUID reuse with other content errors.
 Clients durably save pending mutations BEFORE writing them and reuse their UUID
 after lost acknowledgements/restarts, until reconciled. Do not create new actions
@@ -89,11 +112,15 @@ new deliveries; already displayed/downloaded text cannot be recalled. No transfe
 group deletion, message edits/deletes, attachments, push, or offline creation in v1.
 
 History/member reads hold a shared conversation lock through fetching their rows.
-Sensitive queued frames are bound to the authenticated user and reauthorize group
-membership at the actual TLS write, holding the same shared lock until writing
-finishes. Membership removal holds the exclusive conversation lock. Identity
-switches serialize with writes; obsolete queued frames are discarded. Writes have
-a 10-second deadline. Bytes already written to the transport cannot be recalled.
+Sensitive queued frames are bound to the authenticated user and reauthorize identity
+and group membership immediately before the TLS write, in a short database check that
+finishes before writing starts. No database connection, transaction or lock is held
+while writing to a socket, so a client that stops reading only delays its own socket.
+A frame whose check happens after a removal commits is never delivered to the removed
+member; a frame checked just before the removal may still be written, like bytes
+already queued in TCP buffers. Identity switches serialize with writes; obsolete
+queued frames are discarded. Writes have a 10-second deadline, and a socket whose
+queue of 128 frames fills is closed. Bytes already written cannot be recalled.
 
 TLS uses an installation CA bundled as public PEM text, not fetched over HTTP.
 Never set rejectUnauthorized=false. Native validation must check chain, validity

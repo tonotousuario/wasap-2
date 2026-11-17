@@ -86,10 +86,17 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         val peer = c.rows("SELECT u.id::text,u.matricula,u.name FROM users u JOIN conversation_members cm ON cm.user_id=u.id WHERE cm.conversation_id=?::uuid AND u.id<>?::uuid", row.string("id"), uid).single()
         return JsonObject(row + ("peer" to peer))
     }
-    fun canAccess(uid: String, cid: String): Boolean = try { db.transaction { conversation(it, uid, cid); true } } catch (_: ApiError) { false }
-    fun withConversationAccess(uid: String, cid: String, action: () -> Unit): Boolean {
-        return try { db.transaction { c -> conversation(c, uid, cid, shared = true); action(); true } } catch (_: ApiError) { false }
+    /**
+     * Users whose conversation list changed after a committed membership operation: current
+     * members of the conversation, plus the removed member for groups.remove.
+     */
+    fun affectedUsers(operation: String, payload: JsonObject, result: JsonObject): Set<String> = db.transaction { c ->
+        val cid = (result["conversation"] as? JsonObject)?.string("id") ?: payload.uuid("conversationId")
+        val users = c.rows("SELECT user_id::text AS id FROM conversation_members WHERE conversation_id=?::uuid", cid).map { it.string("id") }.toMutableSet()
+        if (operation == "groups.remove") c.rows("SELECT id::text FROM users WHERE matricula=?", matricula(payload.string("matricula"))).firstOrNull()?.let { users += it.string("id") }
+        users
     }
+    fun canAccess(uid: String, cid: String): Boolean = try { db.transaction { conversation(it, uid, cid); true } } catch (_: ApiError) { false }
     private fun lastEvent(c: Connection, uid: String) = c.rows("SELECT $eventColumns FROM attendance_events WHERE user_id=?::uuid ORDER BY seq DESC LIMIT 1", uid).firstOrNull()
     private fun nextType(event: JsonObject?) = if (event?.string("type") == "ENTRY") "EXIT" else "ENTRY"
 
@@ -227,6 +234,19 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             JsonObject(event + owner)
         }
         JsonObject(result + ("events" to JsonArray(events)))
+    }
+    /** Deletes processed requests older than [retentionDays], in batches to keep locks short. */
+    fun purgeProcessedRequests(retentionDays: Int): Int {
+        require(retentionDays >= 1)
+        var total = 0
+        while (true) {
+            val deleted = db.transaction { it.exec("""
+                DELETE FROM processed_requests WHERE ctid IN (
+                    SELECT ctid FROM processed_requests WHERE created_at < now() - make_interval(days => ?) LIMIT 10000)
+            """, retentionDays) }
+            total += deleted
+            if (deleted < 10000) return total
+        }
     }
     fun users(): List<JsonObject> = db.transaction { it.rows("SELECT $userColumns FROM users ORDER BY matricula") }
 }

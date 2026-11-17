@@ -11,6 +11,7 @@ services:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: ${SERVER_PORT:-5050}
       APP_TIMEZONE: ${APP_TIMEZONE:-America/Mexico_City}
+      PROCESSED_REQUEST_RETENTION_DAYS: ${PROCESSED_REQUEST_RETENTION_DAYS:-30}
       DB_URL: ${DB_URL:?Set DB_URL with sslmode=verify-full}
       DB_USER: ${DB_USER:?Set DB_USER}
       DB_PASSWORD_FILE: /run/secrets/db_password

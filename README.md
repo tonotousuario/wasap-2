@@ -33,7 +33,9 @@ bash scripts/create-certs.sh 192.168.1.50
 
 Sustituye la IP por la del equipo servidor. Edita `.env` con la URL JDBC, usuario y
 tu UID/GID (`id -u` y `id -g`); esto permite leer archivos privados sin ejecutar el
-servidor como root. El puerto predeterminado es 5050 y debe estar permitido en el
+servidor como root. `PROCESSED_REQUEST_RETENTION_DAYS` (30 por defecto, mínimo 1)
+fija cuántos días se guardan los registros que evitan duplicar operaciones
+reintentadas; el servidor los purga cada hora y no arranca si el valor no es válido. El puerto predeterminado es 5050 y debe estar permitido en el
 firewall de la LAN. Los teléfonos necesitan alcanzar la IP del equipo anfitrión,
 no la IP interna del contenedor. La red Wi-Fi no debe aislar sus clientes.
 
@@ -58,7 +60,12 @@ El certificado público `certs/ca.crt` se incorpora a la compilación móvil. Gu
 `ca.key` fuera del contenedor y de los teléfonos. Si cambia la IP, vuelve a ejecutar
 el script con la misma CA y reinicia el servidor; no hace falta cambiar la CA de la
 app. Si cambia la CA sí se necesita recompilar la app. Los certificados del servidor
-duran un año; el script permite renovarlos. No incluyas `certs/` ni `.env` en Git.
+duran un año; el script permite renovarlos. Cuando falten menos de 30 días para
+que venzan, el servidor escribe un aviso `WARNING: TLS certificate expires on …` en
+su salida de error al arrancar y una vez al día (`docker compose logs server`). Para
+renovarlo, ejecuta de nuevo `bash scripts/create-certs.sh <IP>` con la misma CA y
+reinicia el servidor; la app no necesita recompilarse. Un certificado vencido impide
+arrancar. No incluyas `certs/` ni `.env` en Git.
 
 Para probar desde Linux sin abrir Android Studio, sigue la [guía para iniciar el emulador por terminal](mobile/README.md#emulador-android-desde-la-terminal-sin-abrir-android-studio), con conexión al servidor local y Metro.
 
@@ -73,7 +80,9 @@ docker compose exec server /app/bin/wasap-server admin attendance '*' 2026-11-01
 ```
 
 El PIN se solicita sin mostrarlo en una terminal interactiva; no lo pases como
-argumento. Restablecerlo invalida las sesiones anteriores. La consulta de asistencia
+argumento. Restablecerlo invalida las sesiones anteriores: un teléfono que ya estaba
+conectado deja de recibir datos en un máximo de 5 segundos y se le pide iniciar sesión.
+Si necesitas cortar el acceso al instante, reinicia el servidor. La consulta de asistencia
 devuelve hasta 100 movimientos y un `nextCursor`; pásalo como último argumento para
 continuar. Las fechas son inclusivas en `APP_TIMEZONE` (America/Mexico_City por defecto).
 

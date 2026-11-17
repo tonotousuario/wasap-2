@@ -49,6 +49,10 @@ object Frames {
     fun write(output: OutputStream, value: JsonObject) {
         val bytes = value.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size in 1..MAX) { "Frame too large" }
-        DataOutputStream(output).apply { writeInt(bytes.size); write(bytes); flush() }
+        // One write, so header and body travel in a single TLS record; two small writes would
+        // interact with Nagle's algorithm and delayed ACKs and add ~40 ms per frame.
+        val framed = ByteBuffer.allocate(4 + bytes.size).putInt(bytes.size).put(bytes).array()
+        output.write(framed)
+        output.flush()
     }
 }

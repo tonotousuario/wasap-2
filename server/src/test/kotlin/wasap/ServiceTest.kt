@@ -6,9 +6,7 @@ import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.CyclicBarrier
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Tag
@@ -192,24 +190,27 @@ class ServiceTest {
         assertEquals(ids.distinct().sorted(), ids)
     }
 
-    @Test fun `protected delivery linearizes with removal and drops queued revoked content`() {
+    @Test fun `delivery checks see a committed removal immediately`() {
         val cid = call(a, "groups.create", obj("name" to "Clase", "matriculas" to listOf("B001")))["conversation"]!!.jsonObject.string("id")
-        val writing = CountDownLatch(1)
-        val finish = CountDownLatch(1)
-        Executors.newVirtualThreadPerTaskExecutor().use { pool ->
-            val delivery = pool.submit<Boolean> { service.withConversationAccess(b.id, cid) {
-                writing.countDown()
-                check(finish.await(5, TimeUnit.SECONDS))
-            } }
-            assertTrue(writing.await(5, TimeUnit.SECONDS))
-            val removal = pool.submit { call(a, "groups.remove", obj("conversationId" to cid, "matricula" to "B001")) }
-            try { assertFailsWith<TimeoutException> { removal.get(300, TimeUnit.MILLISECONDS) } }
-            finally { finish.countDown() }
-            assertTrue(delivery.get(5, TimeUnit.SECONDS))
-            removal.get(5, TimeUnit.SECONDS)
-            var delivered = false
-            assertFalse(service.withConversationAccess(b.id, cid) { delivered = true })
-            assertFalse(delivered)
-        }
+        assertTrue(service.canAccess(b.id, cid))
+        call(a, "groups.remove", obj("conversationId" to cid, "matricula" to "B001"))
+        assertFalse(service.canAccess(b.id, cid))
+        assertTrue(service.canAccess(a.id, cid))
+        assertTrue(service.canAccess(outsider.id, "00000000-0000-4000-8000-000000000001"), "everyone reaches General")
+    }
+
+    @Test fun `purge removes processed requests older than the retention and keeps recent ones`() {
+        val cid = "00000000-0000-4000-8000-000000000001"
+        val old = UUID.randomUUID().toString()
+        val recent = UUID.randomUUID().toString()
+        val oldPayload = obj("conversationId" to cid, "text" to "viejo")
+        call(a, "messages.send", oldPayload, old)
+        val recentPayload = obj("conversationId" to cid, "text" to "reciente")
+        val recentResult = call(a, "messages.send", recentPayload, recent)
+        db.transaction { c -> c.exec("UPDATE processed_requests SET created_at = now() - interval '31 days' WHERE request_id = ?::uuid", old) }
+        assertEquals(1, service.purgeProcessedRequests(30))
+        val remaining = db.transaction { c -> c.rows("SELECT request_id::text AS id FROM processed_requests") }.map { it.string("id") }
+        assertEquals(listOf(recent), remaining)
+        assertEquals(recentResult, call(a, "messages.send", recentPayload, recent), "recent retries still return the original result")
     }
 }

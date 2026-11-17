@@ -5,6 +5,7 @@ import java.nio.file.Path
 import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
 import kotlinx.serialization.json.*
 
@@ -35,6 +36,8 @@ fun main(args: Array<String>) {
             }
             return
         }
+        // Validate serve-only settings before touching the database.
+        val retention = if (args.firstOrNull() == "admin") 0 else retentionDays(System.getenv("PROCESSED_REQUEST_RETENTION_DAYS"))
         Database(env("DB_URL"), env("DB_USER"), secret("DB_PASSWORD"), env("DB_SCHEMA", "public"), env("DB_ALLOW_INSECURE", "false") == "true").use { db ->
             val service = Service(db, ZoneId.of(env("APP_TIMEZONE", "America/Mexico_City")))
             if (args.firstOrNull() == "admin") {
@@ -56,10 +59,16 @@ fun main(args: Array<String>) {
                 }
             } else {
                 require(args.isEmpty() || args.toList() == listOf("serve")) { "Use serve, healthcheck or admin" }
-                val context = Tls.serverContext(Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12")), secret("TLS_KEYSTORE_PASSWORD"))
+                val keystore = Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12"))
+                val keystorePassword = secret("TLS_KEYSTORE_PASSWORD")
+                val context = Tls.serverContext(keystore, keystorePassword)
                 val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt())
+                val maintenance = Maintenance()
+                maintenance.every(1, TimeUnit.HOURS, "processed request purge") { service.purgeProcessedRequests(retention) }
+                val expiry = Tls.earliestExpiry(keystore, keystorePassword)
+                maintenance.every(24, TimeUnit.HOURS, "certificate expiry check") { Tls.expiryWarning(expiry)?.let(System.err::println) }
                 val stop = CountDownLatch(1)
-                Runtime.getRuntime().addShutdownHook(Thread { server.close(); stop.countDown() })
+                Runtime.getRuntime().addShutdownHook(Thread { maintenance.close(); server.close(); stop.countDown() })
                 server.start()
                 println("WASAP TLS/TCP listening on port ${server.port}; database ready")
                 stop.await()

@@ -31,6 +31,28 @@ class ProtocolTest {
         assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0,0,0,2,0xc3.toByte(),0x28))) }
     }
 
+    @Test fun `database failures are transient only for retryable sqlstate classes`() {
+        fun sql(state: String?) = java.sql.SQLException("detalle interno", state)
+        listOf("08001", "08006", "40001", "40P01", "53300", "57014", "57P01").forEach { state ->
+            assertTrue(isTransientDatabaseFailure(sql(state)), state)
+        }
+        listOf("23505", "22P05", "42601", null).forEach { state ->
+            assertFalse(isTransientDatabaseFailure(sql(state)), state.toString())
+        }
+        assertTrue(isTransientDatabaseFailure(java.sql.SQLTransientConnectionException("pool timeout")))
+        assertTrue(isTransientDatabaseFailure(RuntimeException(sql("08003"))), "cause chain")
+        assertTrue(isTransientDatabaseFailure(sql("23505").apply { nextException = sql("40001") }), "next exception")
+        assertEquals("22", sqlStateClass(RuntimeException(sql("22P05"))))
+        assertNull(sqlStateClass(IllegalStateException("x")))
+    }
+
+    @Test fun `processed request retention defaults to 30 days and rejects invalid values`() {
+        assertEquals(30, retentionDays(null))
+        assertEquals(30, retentionDays(" "))
+        assertEquals(7, retentionDays(" 7 "))
+        listOf("0", "-3", "abc", "1.5").forEach { assertEquals("VALIDATION", assertFailsWith<ApiError> { retentionDays(it) }.code, it) }
+    }
+
     @Test fun `pin hashes are salted verified and reject malformed input`() {
         val hash = Pins.hash("123456")
         assertNotEquals(hash, Pins.hash("123456"))

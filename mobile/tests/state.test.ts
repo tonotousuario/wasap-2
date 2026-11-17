@@ -47,6 +47,16 @@ test('terminal conflict clears pending; unavailable keeps pending for retry',asy
   await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('UNAVAILABLE','later');}));
   assert.deepEqual(await journal.load(),op);
 });
+test('INTERNAL is final and clears pending; UNAUTHENTICATED keeps it for the same user',async()=>{
+  const disk=new Memory();const journal=new PendingMutation(disk,'a/user');
+  const op={id:'1',type:'messages.send',payload:{conversationId:'room',text:'hola'}};
+  await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('INTERNAL','boom');}),/boom/);
+  assert.equal(await journal.load(),null);
+  await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('UNAUTHENTICATED','login');}));
+  assert.deepEqual(await journal.load(),op);
+  await assert.rejects(journal.replay(async()=>{throw new ProtocolError('INTERNAL','boom');}));
+  assert.equal(await journal.load(),null);
+});
 test('orders arbitrary precision sequences, deduplicates records and ignores other rooms',()=>{
   const message=(id:string,seq:string,conversationId='room'):Message=>({id,seq,conversationId,senderId:'u',senderName:'Ana',text:id,createdAt:'2026-11-12T00:00:00Z'});
   const a=message('a','9007199254740993'),b=message('b','9007199254740992');

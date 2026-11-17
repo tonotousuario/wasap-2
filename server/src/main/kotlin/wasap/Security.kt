@@ -5,6 +5,7 @@ import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
@@ -36,10 +37,21 @@ data class User(val id: String, val matricula: String, val name: String) {
     var credentialVersion: Int = 1
     fun toJson() = obj("id" to id, "matricula" to matricula, "name" to name)
 }
-data class Session(val token: String, val user: User, val expiresAt: Instant, val credentialVersion: Int) {
+class Session(val token: String, val user: User, val expiresAt: Instant, val credentialVersion: Int, validatedAt: Long) {
+    /** Monotonic instant (Sessions clock) when credential_version was last confirmed in the database. */
+    @Volatile internal var validatedAt: Long = validatedAt
     fun toJson() = obj("token" to token, "expiresAt" to expiresAt, "user" to user.toJson())
 }
-class Sessions {
+
+/**
+ * In-memory sessions. Credential checks against the database are cached per session and
+ * repeated at most once per [revalidateAfterNanos], so a PIN reset revokes sessions within
+ * that bound without querying the database for every request, frame or event recipient.
+ */
+class Sessions(
+    private val clock: () -> Long = System::nanoTime,
+    private val revalidateAfterNanos: Long = TimeUnit.SECONDS.toNanos(5),
+) {
     private val entries = ConcurrentHashMap<String, Session>()
     private val random = SecureRandom()
     @Synchronized fun create(user: User, version: Int): Session {
@@ -47,23 +59,69 @@ class Sessions {
         // Bounded LAN service: at most five remembered logins per account.
         entries.values.filter { it.user.id == user.id }.sortedBy { it.expiresAt }.dropLast(4).forEach { entries.remove(it.token) }
         val token = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also(random::nextBytes))
-        return Session(token, user, Instant.now().plusSeconds(86400), version).also { entries[token] = it }
+        return Session(token, user, Instant.now().plusSeconds(86400), version, clock()).also { entries[token] = it }
     }
-    fun get(token: String): Session = entries[token]?.takeIf { it.expiresAt > Instant.now() }
+    fun get(token: String): Session = entries[token]?.takeIf(::isLive)
         ?: throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente")
     fun remove(token: String) { entries.remove(token) }
+
+    /** Cached validity without touching the database: still registered and not expired. */
+    fun isLive(session: Session): Boolean = entries[session.token] === session && session.expiresAt > Instant.now()
+
+    /**
+     * Confirms [session] is still valid, consulting [currentVersion] (a database read) only when
+     * the cached check is older than the revalidation interval or [force] is set (resuming a
+     * stored token). Revoked sessions are removed.
+     */
+    fun validate(session: Session, currentVersion: (userId: String) -> Int, force: Boolean = false): Session {
+        if (!isLive(session)) throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente")
+        if (!force && clock() - session.validatedAt < revalidateAfterNanos) return session
+        synchronized(session) {
+            val now = clock()
+            if (!force && now - session.validatedAt < revalidateAfterNanos) return session
+            if (currentVersion(session.user.id) != session.credentialVersion) {
+                entries.remove(session.token, session)
+                throw ApiError("UNAUTHENTICATED", "El PIN cambió; inicia sesión nuevamente")
+            }
+            session.validatedAt = now
+        }
+        return session
+    }
 }
 
-class LoginLimiter {
-    private data class Window(var started: Long, var attempts: Int)
-    private val windows = HashMap<String, Window>()
+/**
+ * Counts failed logins per key in fixed 15-minute windows. Only failures count: call [check]
+ * before verifying a PIN and [fail] after an invalid one. When full, the oldest window is
+ * evicted so an attacker filling the table cannot lock out everyone else.
+ */
+class LoginLimiter(
+    private val capacity: Int = 10000,
+    private val clock: () -> Long = System::nanoTime,
+    private val windowNanos: Long = TimeUnit.MINUTES.toNanos(15),
+) {
+    private class Window(val started: Long, var failures: Int)
+    // Insertion order equals start order because a window is only created on its first failure.
+    private val windows = LinkedHashMap<String, Window>()
+
     @Synchronized fun check(key: String, maximum: Int = 5) {
-        val now = System.nanoTime()
-        val duration = 15L * 60 * 1_000_000_000
-        windows.entries.removeIf { now - it.value.started >= duration }
-        if (windows.size >= 10000 && key !in windows) throw ApiError("RATE_LIMITED", "Intenta más tarde")
-        val window = windows.getOrPut(key) { Window(now, 0) }
-        if (window.attempts >= maximum) throw ApiError("RATE_LIMITED", "Demasiados intentos; espera 15 minutos")
-        window.attempts++
+        prune()
+        if ((windows[key]?.failures ?: 0) >= maximum) throw ApiError("RATE_LIMITED", "Demasiados intentos; espera 15 minutos")
+    }
+
+    @Synchronized fun fail(key: String) {
+        prune()
+        val window = windows[key] ?: Window(clock(), 0).also {
+            if (windows.size >= capacity) windows.remove(windows.keys.first())
+            windows[key] = it
+        }
+        window.failures++
+    }
+
+    @Synchronized fun size(): Int = windows.size
+
+    private fun prune() {
+        val now = clock()
+        val iterator = windows.values.iterator()
+        while (iterator.hasNext() && now - iterator.next().started >= windowNanos) iterator.remove()
     }
 }

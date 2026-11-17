@@ -1,5 +1,5 @@
 import type {Envelope} from './protocol.ts';
-import {PendingMutation,ProtocolError,mergeMessages,compareSeq,type Storage} from './state.ts';
+import {PendingMutation,ProtocolError,isTerminal,mergeMessages,compareSeq,type Storage} from './state.ts';
 import type {Server,Session,Message,AttendanceState,AttendanceEvent,Conversation} from './types.ts';
 import {ConnectError,errorCode,errorDetail} from './errors.ts';
 import {presetRange,type RangePreset} from './format.ts';
@@ -112,7 +112,7 @@ export class Engine {
     try{await this.journal.replay(op=>this.queryOperation(op));}
     catch(error){
       this.report(error);
-      if(!(error instanceof ProtocolError)||['UNAUTHENTICATED','UNAVAILABLE','INTERNAL'].includes(error.code))throw error;
+      if(!isTerminal(error))throw error;
     }finally{this.update(await this.pendingPatch());}
   }
   private queryOperation(op:{type:string;payload:Record<string,unknown>;id:string}){

@@ -11,6 +11,30 @@ import kotlin.test.*
 
 @Tag("integration")
 class TlsServerTest {
+    @Test fun `operators are warned only when the certificate expires within 30 days`() {
+        val dir = Files.createTempDirectory("wasap-expiry-test")
+        try {
+            fun keystore(days: Int): java.nio.file.Path {
+                val key = dir.resolve("k$days.pem"); val cert = dir.resolve("c$days.pem"); val store = dir.resolve("s$days.p12")
+                fun run(vararg command: String) {
+                    val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+                    val output = process.inputStream.bufferedReader().readText()
+                    assertTrue(process.waitFor(30, TimeUnit.SECONDS)); assertEquals(0, process.exitValue(), output)
+                }
+                run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "$days", "-subj", "/CN=WASAP Test",
+                    "-keyout", key.toString(), "-out", cert.toString())
+                run("openssl", "pkcs12", "-export", "-name", "wasap", "-inkey", key.toString(), "-in", cert.toString(),
+                    "-out", store.toString(), "-passout", "pass:secreto")
+                Tls.serverContext(store, "secreto") // still a valid keystore for serving
+                return store
+            }
+            val soon = Tls.expiryWarning(Tls.earliestExpiry(keystore(10), "secreto"))
+            assertNotNull(soon)
+            assertTrue(soon.contains("expires on") && soon.contains("create-certs.sh"), soon)
+            assertNull(Tls.expiryWarning(Tls.earliestExpiry(keystore(200), "secreto")))
+        } finally { dir.toFile().deleteRecursively() }
+    }
+
     @Test fun `tls authenticates frames rejects invalid peers and enforces logout and session invalidation`() {
         val url = requireNotNull(System.getenv("WASAP_TEST_DB_URL"))
         val user = System.getenv("WASAP_TEST_DB_USER") ?: "wasap_test"
@@ -25,7 +49,8 @@ class TlsServerTest {
         Database(url, user, password, schema, true).use { db ->
             val service = Service(db)
             service.createUser("A001", "Ana", "123456")
-            val server = TcpServer(service, db, Tls.serverContext(dir.resolve("server.p12"), storePassword), "127.0.0.1", 0)
+            var clock = 0L
+            val server = TcpServer(service, db, Tls.serverContext(dir.resolve("server.p12"), storePassword), "127.0.0.1", 0, Sessions(clock = { clock }))
             try {
                 server.start()
                 fun connect(host: String = "127.0.0.1") = (Tls.clientContext(dir.resolve("ca.crt")).socketFactory.createSocket(host, server.port) as SSLSocket).apply {
@@ -62,6 +87,7 @@ class TlsServerTest {
                     assertEquals("error", request(socket, "auth.resume", obj("token" to token)).string("type"))
                     request(socket, "auth.login", obj("matricula" to "A001", "pin" to "123456"))
                     service.resetPin("A001", "121212")
+                    clock += TimeUnit.SECONDS.toNanos(6) // revocation is bounded by the 5 s revalidation window
                     assertEquals("error", request(socket, "attendance.state").string("type"))
                 }
                 // The signed certificate intentionally has only IP SANs, not localhost DNS.

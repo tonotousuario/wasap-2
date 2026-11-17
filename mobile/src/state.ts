@@ -1,5 +1,9 @@
 import type {Message, Operation} from './types.ts';
 export class ProtocolError extends Error {code:string;constructor(code:string,message:string){super(message);this.code=code;}}
+// Only these server answers mean the operation may still succeed with the same UUID.
+// Any other server error (including INTERNAL) is final: the server never committed it.
+export const RETRYABLE_CODES=['UNAVAILABLE','UNAUTHENTICATED'];
+export function isTerminal(error:unknown):boolean{return error instanceof ProtocolError&&!RETRYABLE_CODES.includes(error.code);}
 export interface Storage {getItem(key:string):Promise<string|null>;setItem(key:string,value:string):Promise<void>;removeItem(key:string):Promise<void>}
 export class PendingMutation {
   private storage:Storage;
@@ -11,7 +15,7 @@ export class PendingMutation {
   private async settle(op:Operation,send:(op:Operation)=>Promise<unknown>):Promise<any>{
     try{const result=await send(op);await this.discard();return result;}
     catch(error){
-      if(error instanceof ProtocolError&&!['UNAVAILABLE','INTERNAL','UNAUTHENTICATED'].includes(error.code)) await this.discard();
+      if(isTerminal(error)) await this.discard();
       throw error;
     }
   }
