@@ -25,6 +25,9 @@ En Linux no se puede compilar iOS. Se usa `npx eas-cli build --platform ios --pr
 ### D4. Red de los testers
 El certificado del servidor debe incluir en el SAN la IP o el host que usarán los testers. Si la prueba es fuera de la LAN del servidor, hace falta exponer el puerto 5050 y regenerar el certificado con `scripts/create-certs.sh`; se documenta en la guía.
 
+### D5. Documentación visual al final
+Las capturas se toman con la versión alpha ya compilada, para que coincidan con lo que verán los testers. Los diagramas se escriben en Mermaid (GitHub los renderiza y viven como texto en Git) y las capturas se guardan como PNG optimizados en `docs/images/`. Un script pequeño valida que cada imagen enlazada existe.
+
 ## Risks / Trade-offs
 
 - [Pérdida del keystore de alpha] → Solo afecta a las actualizaciones de la alpha (habría que desinstalarla y volver a instalarla); se recomienda respaldarlo.

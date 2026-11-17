@@ -10,6 +10,7 @@ Hay que entregar una versión alpha para que otras personas prueben WASAP en And
 - APK alpha firmado con un keystore de alpha guardado fuera del repositorio, generado localmente con el perfil `preview` y verificado en el emulador Android.
 - Build iOS alpha mediante EAS Build en la nube, distribuido por TestFlight o ad-hoc, con la cuenta Expo y Apple del usuario.
 - Guía de instalación para testers.
+- Documentación visual: galería de capturas actualizadas y diagramas (arquitectura, trama del protocolo, sesiones, despliegue) en el README y en la documentación que lo necesite.
 
 Sin cambios de comportamiento: este cambio no tiene deltas de specs (`skip_specs: true`).
 

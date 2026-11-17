@@ -10,6 +10,7 @@
 - [ ] 2.1 `Thread.tsx`: burbujas pendientes derivadas del diario, mensajes no enviados con motivo y acciones copiar/descartar, compositor que se limpia al encolar y bloqueo con cola llena; verificar con `npx tsc --noEmit`
 - [ ] 2.2 Avisos en `App.tsx`, `Attendance.tsx` y `Settings.tsx` con el número de pendientes y el bloqueo de asistencia mientras haya cola; verificar con `npx tsc --noEmit`
 - [ ] 2.3 Actualizar `mobile/README.md` y `docs/protocol.md` (sección del cliente) con la cola de salida
+- [ ] 2.4 Capturar en el AVD el hilo con mensajes en cola y con un mensaje no enviado, guardarlas en `docs/images/` y añadirlas a `docs/verification.md`, con un diagrama de secuencia de la cola (encolar → enviar uno a uno → confirmar / error definitivo) en `docs/architecture.md`; verificar que las imágenes se ven en la vista previa de Markdown
 
 ## 3. Verificación integrada
 

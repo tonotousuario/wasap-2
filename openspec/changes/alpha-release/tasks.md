@@ -14,6 +14,12 @@
 
 - [ ] 3.1 Configurar `WASAP_CA_PEM` y el proyecto en EAS con el login del usuario; con su confirmación, lanzar el build iOS (ad-hoc o TestFlight, según su elección) y verificar que termina y queda disponible para los testers
 
-## 4. Entrega
+## 4. Documentación visual
 
-- [ ] 4.1 Documentar en `mobile/README.md` la instalación de la alpha (APK y iOS), la IP o el certificado que necesita el tester y cómo reportar errores desde Diagnóstico; verificar siguiendo la guía en el AVD con el APK generado
+- [ ] 4.1 Capturar en el AVD, con la versión alpha, las pantallas principales (acceso, servidor, asistencia Dentro/Fuera con historial, lista de chats, hilo, nuevo chat con búsqueda, crear grupo, integrantes, ajustes y diagnóstico) y guardarlas optimizadas en `docs/images/` (PNG ≤ 300 KB cada una); verificar tamaños con `du`
+- [ ] 4.2 Rehacer la portada de `README.md`: presentación breve, galería de capturas en tabla, diagrama de arquitectura (Mermaid) y un diagrama de la trama del protocolo; verificar que GitHub renderiza Mermaid y que todos los enlaces de imágenes existen
+- [ ] 4.3 Añadir diagramas donde falten: secuencia de login/reanudación con sesiones persistentes y revocación en `docs/protocol.md`, y despliegue (contenedores, red, volúmenes, certificados) en `docs/local-runtime.md`; actualizar `docs/verification.md` con la galería nueva y quitar capturas obsoletas; verificar con un comprobador de enlaces locales (script que valida cada `![...](ruta)` y `<img src>`)
+
+## 5. Entrega
+
+- [ ] 5.1 Documentar en `mobile/README.md` la instalación de la alpha (APK y iOS), la IP o el certificado que necesita el tester y cómo reportar errores desde Diagnóstico; verificar siguiendo la guía en el AVD con el APK generado
