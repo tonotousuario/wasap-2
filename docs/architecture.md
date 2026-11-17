@@ -81,7 +81,7 @@ sequenceDiagram
             A->>Q: Quita el primero
         else UNAVAILABLE, sin respuesta o sesión vencida
             S-->>A: Error reintentable
-            A->>A: Detiene la cola intacta; reintenta al reconectar
+            A->>A: Detiene la cola intacta y reintenta al reconectar
         else Error definitivo
             S-->>A: FORBIDDEN, INTERNAL, VALIDATION…
             A->>Q: Quita solo ese mensaje
