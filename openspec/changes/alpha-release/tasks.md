@@ -7,7 +7,7 @@
 
 ## 2. Android
 
-- [ ] 2.1 Generar el keystore de alpha en `~/.wasap/` y configurar la firma del release por propiedades de Gradle fuera del repo; verificar con `git status` que no se versiona ningún secreto
+- [x] 2.1 Generar el keystore de alpha en `~/.wasap/` y configurar la firma del release por propiedades de Gradle fuera del repo; verificar con `git status` que no se versiona ningún secreto
 - [ ] 2.2 Compilar el APK de release con `WASAP_CA_PEM`; instalarlo con `adb install` en el AVD `Medium_Phone_API_37.0` y verificar contra el servidor local: login, entrada/salida, privado, grupo, cola de mensajes y reconexión tras reiniciar el servidor sin pedir PIN
 
 ## 3. iOS

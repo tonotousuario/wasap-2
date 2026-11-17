@@ -18,7 +18,7 @@ const config: ExpoConfig = {
     package: 'mx.wasap.app',
     permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE'],
   },
-  plugins: ['expo-dev-client', 'expo-secure-store', './plugins/with-tls.cjs'],
+  plugins: ['expo-dev-client', 'expo-secure-store', './plugins/with-tls.cjs', './plugins/with-release-signing.cjs'],
   extra: {
     installationCaPem: caPem,
     ...(process.env.EAS_PROJECT_ID ? {eas: {projectId: process.env.EAS_PROJECT_ID}} : {}),

@@ -16,7 +16,7 @@
 Se aplica después de los cambios funcionales para no generar conflictos con ellos. Se usan Prettier y ktlint con su configuración por defecto y ancho de línea de 120, para acercarse al estilo actual sin discusiones de configuración. El hash del commit se añade a `.git-blame-ignore-revs`.
 
 ### D2. APK local con `assembleRelease`
-`npx expo prebuild --platform android` y luego `./gradlew :app:assembleRelease` con un keystore de alpha (`~/.wasap/alpha.keystore`, fuera del repositorio) configurado mediante propiedades de Gradle en `~/.gradle/gradle.properties`. Así no hace falta una cuenta EAS para Android.
+`npx expo prebuild --platform android` y luego `./gradlew :app:assembleRelease` con un keystore de alpha (`~/.wasap/alpha.keystore`, fuera del repositorio) configurado mediante propiedades de Gradle (`ORG_GRADLE_PROJECT_wasapRelease*`) que inyecta el plugin `with-release-signing.cjs`, sin tocar archivos globales. Así no hace falta una cuenta EAS para Android.
 - *Alternativa:* `eas build --profile preview --local`. Válida, pero requiere `eas-cli` e iniciar sesión; queda documentada como opción.
 
 ### D3. iOS por EAS en la nube
