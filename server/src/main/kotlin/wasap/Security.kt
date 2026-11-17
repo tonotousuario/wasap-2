@@ -20,17 +20,24 @@ object Pins {
     }
     private fun derive(pin: String, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(pin.toCharArray(), salt, ITERATIONS, 256)
-        return try { SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded }
-        finally { spec.clearPassword() }
+        return try {
+            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+        } finally {
+            spec.clearPassword()
+        }
     }
     fun verify(pin: String, encoded: String): Boolean = try {
-        if (!pin.matches(Regex("[0-9]{6,12}"))) false else {
+        if (!pin.matches(Regex("[0-9]{6,12}"))) {
+            false
+        } else {
             val pieces = encoded.split(':')
             val salt = Base64.getDecoder().decode(pieces[0])
             val expected = Base64.getDecoder().decode(pieces[1])
             salt.size == 16 && expected.size == 32 && MessageDigest.isEqual(derive(pin, salt), expected)
         }
-    } catch (_: Exception) { false }
+    } catch (_: Exception) {
+        false
+    }
 }
 
 data class User(val id: String, val matricula: String, val name: String) {
@@ -40,6 +47,7 @@ data class User(val id: String, val matricula: String, val name: String) {
 class Session(val token: String, val user: User, val expiresAt: Instant, val credentialVersion: Int, validatedAt: Long) {
     /** Lookup key: SHA-256 of the token, also the database primary key. */
     val hash: String = tokenHash(token)
+
     /** Monotonic instant (Sessions clock) when the session was last confirmed in the database. */
     @Volatile internal var validatedAt: Long = validatedAt
     fun toJson() = obj("token" to token, "expiresAt" to expiresAt, "user" to user.toJson())
@@ -73,7 +81,10 @@ class Sessions(
     fun get(token: String): Session {
         val hash = tokenHash(token)
         cache[hash]?.takeIf(::isLive)?.let { return it }
-        val stored = store.find(hash) ?: run { cache.remove(hash); throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente") }
+        val stored = store.find(hash) ?: run {
+            cache.remove(hash)
+            throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente")
+        }
         val session = Session(token, stored.user, stored.expiresAt, stored.credentialVersion, clock())
         return cache.merge(hash, session) { current, loaded -> if (isLive(current)) current else loaded }!!
     }
@@ -125,6 +136,7 @@ class LoginLimiter(
     private val windowNanos: Long = TimeUnit.MINUTES.toNanos(15),
 ) {
     private class Window(val started: Long, var failures: Int)
+
     // Insertion order equals start order because a window is only created on its first failure.
     private val windows = LinkedHashMap<String, Window>()
 

@@ -19,11 +19,15 @@ class Maintenance : AutoCloseable {
 
     fun every(period: Long, unit: TimeUnit, name: String, task: () -> Unit) {
         scheduler.scheduleWithFixedDelay({
-            try { task() } catch (e: Exception) {
+            try {
+                task()
+            } catch (e: Exception) {
                 System.err.println("$name failed: ${e.javaClass.simpleName}${sqlStateClass(e)?.let { " (SQLSTATE class $it)" } ?: ""}")
             }
         }, 0, period, unit)
     }
 
-    override fun close() { scheduler.shutdownNow() }
+    override fun close() {
+        scheduler.shutdownNow()
+    }
 }

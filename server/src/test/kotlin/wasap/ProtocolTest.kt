@@ -1,12 +1,12 @@
 package wasap
 
+import kotlinx.serialization.json.*
+import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.FilterInputStream
 import java.nio.ByteBuffer
-import kotlinx.serialization.json.*
 import kotlin.test.*
-import org.junit.jupiter.api.Test
 
 class ProtocolTest {
     @Test fun `frames survive split bytes and concatenation including unicode`() {
@@ -26,9 +26,9 @@ class ProtocolTest {
             assertFails { Frames.read(ByteArrayInputStream(ByteBuffer.allocate(4).putInt(size).array())) }
         }
         assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0, 0))) }
-        assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0,0,0,2,123))) }
-        assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0,0,0,1,91))) }
-        assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0,0,0,2,0xc3.toByte(),0x28))) }
+        assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0, 0, 0, 2, 123))) }
+        assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0, 0, 0, 1, 91))) }
+        assertFails { Frames.read(ByteArrayInputStream(byteArrayOf(0, 0, 0, 2, 0xc3.toByte(), 0x28))) }
     }
 
     @Test fun `database failures are transient only for retryable sqlstate classes`() {

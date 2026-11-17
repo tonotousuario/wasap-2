@@ -1,11 +1,11 @@
 package wasap
 
-import java.util.UUID
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import java.util.UUID
 import kotlin.test.*
 
 /** Integration tests for harden-server-load-resilience over real TLS sockets and PostgreSQL. */
@@ -20,7 +20,10 @@ class HardeningTest {
         env.service.createUser("B001", "Beto", "654321")
         env.service.createUser("C001", "Caro", "111111")
     }
-    @AfterEach fun cleanup() { if (::env.isInitialized) env.close() }
+
+    @AfterEach fun cleanup() {
+        if (::env.isInitialized) env.close()
+    }
 
     @Test fun `deterministic database failures answer INTERNAL instead of UNAVAILABLE`() {
         env.connect().use { a ->
@@ -89,50 +92,63 @@ class HardeningTest {
                 }
                 assertTrue(slowest < 2_000_000_000L, "a send took ${slowest / 1_000_000} ms")
             }
-        } finally { slow.forEach { it.close() } }
+        } finally {
+            slow.forEach { it.close() }
+        }
     }
 
     @Test fun `removed member never receives later messages of the group`() {
-        env.connect().use { a -> env.connect().use { b ->
-            a.login("A001", "123456"); b.login("B001", "654321")
-            val group = a.ok("groups.create", obj("name" to "Clase", "matriculas" to listOf("B001")))["conversation"]!!.jsonObject.string("id")
-            a.ok("messages.send", obj("conversationId" to group, "text" to "antes"))
-            a.ok("ping") // barrier: the sender finished routing its events
-            assertTrue("message.created" in b.drain())
-            b.events.clear()
-            a.ok("groups.remove", obj("conversationId" to group, "matricula" to "B001"))
-            a.ok("messages.send", obj("conversationId" to group, "text" to "después"))
-            a.ok("ping")
-            assertFalse("message.created" in b.drain(), "verification after the removal commit drops the frame")
-        } }
+        env.connect().use { a ->
+            env.connect().use { b ->
+                a.login("A001", "123456")
+                b.login("B001", "654321")
+                val group = a.ok("groups.create", obj("name" to "Clase", "matriculas" to listOf("B001")))["conversation"]!!.jsonObject.string("id")
+                a.ok("messages.send", obj("conversationId" to group, "text" to "antes"))
+                a.ok("ping") // barrier: the sender finished routing its events
+                assertTrue("message.created" in b.drain())
+                b.events.clear()
+                a.ok("groups.remove", obj("conversationId" to group, "matricula" to "B001"))
+                a.ok("messages.send", obj("conversationId" to group, "text" to "después"))
+                a.ok("ping")
+                assertFalse("message.created" in b.drain(), "verification after the removal commit drops the frame")
+            }
+        }
     }
 
     @Test fun `conversations changed reaches only affected users`() {
-        env.connect().use { a -> env.connect().use { b -> env.connect().use { c ->
-            a.login("A001", "123456"); b.login("B001", "654321"); c.login("C001", "111111")
-            fun changedFor(vararg clients: TestServer.Client) = clients.map { client ->
-                val seen = "conversations.changed" in client.drain(); client.events.clear(); seen
+        env.connect().use { a ->
+            env.connect().use { b ->
+                env.connect().use { c ->
+                    a.login("A001", "123456")
+                    b.login("B001", "654321")
+                    c.login("C001", "111111")
+                    fun changedFor(vararg clients: TestServer.Client) = clients.map { client ->
+                        val seen = "conversations.changed" in client.drain()
+                        client.events.clear()
+                        seen
+                    }
+                    val group = a.ok("groups.create", obj("name" to "Clase", "matriculas" to listOf("B001")))["conversation"]!!.jsonObject.string("id")
+                    a.ok("ping") // barrier: the sender finished routing its events
+                    assertEquals(listOf(true, true, false), changedFor(a, b, c), "create: members only")
+
+                    a.ok("groups.add", obj("conversationId" to group, "matricula" to "C001"))
+                    a.ok("ping")
+                    assertEquals(listOf(true, true, true), changedFor(a, b, c), "add: the new member too")
+
+                    a.ok("groups.remove", obj("conversationId" to group, "matricula" to "B001"))
+                    a.ok("ping")
+                    assertEquals(listOf(true, true, true), changedFor(a, b, c), "remove: the removed member is told")
+
+                    a.ok("groups.remove", obj("conversationId" to group, "matricula" to "C001"))
+                    a.ok("ping")
+                    assertEquals(listOf(true, false, true), changedFor(a, b, c), "remove: B already left, C is told")
+
+                    b.ok("conversations.direct", obj("matricula" to "A001"))
+                    b.ok("ping")
+                    assertEquals(listOf(true, true, false), changedFor(a, b, c), "direct: both participants, nobody else")
+                }
             }
-            val group = a.ok("groups.create", obj("name" to "Clase", "matriculas" to listOf("B001")))["conversation"]!!.jsonObject.string("id")
-            a.ok("ping") // barrier: the sender finished routing its events
-            assertEquals(listOf(true, true, false), changedFor(a, b, c), "create: members only")
-
-            a.ok("groups.add", obj("conversationId" to group, "matricula" to "C001"))
-            a.ok("ping")
-            assertEquals(listOf(true, true, true), changedFor(a, b, c), "add: the new member too")
-
-            a.ok("groups.remove", obj("conversationId" to group, "matricula" to "B001"))
-            a.ok("ping")
-            assertEquals(listOf(true, true, true), changedFor(a, b, c), "remove: the removed member is told")
-
-            a.ok("groups.remove", obj("conversationId" to group, "matricula" to "C001"))
-            a.ok("ping")
-            assertEquals(listOf(true, false, true), changedFor(a, b, c), "remove: B already left, C is told")
-
-            b.ok("conversations.direct", obj("matricula" to "A001"))
-            b.ok("ping")
-            assertEquals(listOf(true, true, false), changedFor(a, b, c), "direct: both participants, nobody else")
-        } } }
+        }
     }
 
     @Test fun `directory search needs a session`() {

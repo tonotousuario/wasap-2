@@ -3,13 +3,31 @@
 import type {Conversation, Message} from './types.ts';
 
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
 const pad = (value: number) => String(value).padStart(2, '0');
 
 /** Fecha local del dispositivo como AAAA-MM-DD (formato que espera el servidor). */
 export function isoDate(date: Date, timezone?: string) {
   if (timezone) {
-    const parts = new Intl.DateTimeFormat('en', {timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(date);
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
     const part = (name: string) => parts.find(value => value.type === name)!.value;
     return `${part('year')}-${part('month')}-${part('day')}`;
   }
@@ -17,13 +35,20 @@ export function isoDate(date: Date, timezone?: string) {
 }
 export function clock(instant: string, timezone?: string) {
   const date = new Date(instant);
-  if (timezone) return new Intl.DateTimeFormat('en-GB', {timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).format(date);
+  if (timezone)
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(date);
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 export function dayKey(instant: string, timezone?: string) {
   return isoDate(new Date(instant), timezone);
 }
-const calendarDate = (calendar: Date | string) => typeof calendar === 'string' ? new Date(`${calendar}T12:00:00`) : calendar;
+const calendarDate = (calendar: Date | string) =>
+  typeof calendar === 'string' ? new Date(`${calendar}T12:00:00`) : calendar;
 function shiftDays(date: Date, days: number) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
@@ -91,7 +116,10 @@ export function displayDate(iso: string) {
   return `${day}/${month}/${year}`;
 }
 /** Valida un rango escrito a mano. Devuelve filtros o el motivo del rechazo. */
-export function customRange(fromText: string, toText: string): {filters: {from?: string; to?: string}} | {problem: string} {
+export function customRange(
+  fromText: string,
+  toText: string,
+): {filters: {from?: string; to?: string}} | {problem: string} {
   const from = fromText.trim() ? parseDisplayDate(fromText) : undefined;
   const to = toText.trim() ? parseDisplayDate(toText) : undefined;
   if (from === null) return {problem: 'La fecha «Desde» no existe. Usa día/mes/año, por ejemplo 03/11/2026.'};
@@ -111,7 +139,12 @@ export function initials(name: string) {
  * El servidor identifica al destinatario. Los servidores anteriores pueden
  * resolverlo con los integrantes o los mensajes ya recibidos.
  */
-export function conversationTitle(conversation: Conversation, peerName: string | undefined, messages: Message[], ownId: string | undefined) {
+export function conversationTitle(
+  conversation: Conversation,
+  peerName: string | undefined,
+  messages: Message[],
+  ownId: string | undefined,
+) {
   if (conversation.kind !== 'DIRECT') return conversation.name;
   if (conversation.peer) return conversation.peer.name;
   if (peerName) return peerName;
@@ -144,21 +177,41 @@ export type Explained = {title: string; body: string};
 /** Convierte un código de error en un mensaje con causa y siguiente paso. */
 export function explainError(code: string, message: string): Explained {
   switch (code) {
-    case 'INVALID_CREDENTIALS': return {title: 'Matrícula o PIN incorrectos', body: 'Revisa tus datos y vuelve a intentarlo.'};
-    case 'RATE_LIMITED': return {title: 'Demasiados intentos', body: 'Espera un momento antes de intentarlo otra vez.'};
-    case 'UNAUTHENTICATED': return {title: 'Tu sesión venció', body: 'Vuelve a entrar para continuar.'};
-    case 'CONNECT_UNREACHABLE': return {title: 'No se pudo llegar al servidor', body: 'Revisa el Wi-Fi, la dirección y el puerto del servidor.'};
-    case 'CONNECT_TLS': return {title: 'Conexión segura rechazada', body: 'El certificado del servidor no es válido para esta dirección. Avisa a quien lo administra.'};
-    case 'CONNECT_CLOSED': return {title: 'Se perdió la conexión', body: 'Volveremos a intentarlo automáticamente.'};
-    case 'CONNECT_OFFLINE': return {title: 'Sin conexión', body: 'Esta acción necesita conexión con el servidor.'};
-    case 'CONNECT_CONFIG': return {title: 'Instalación incompleta', body: 'Esta copia de la app no incluye el certificado de instalación.'};
-    case 'CONFLICT': return {title: 'Tu asistencia cambió en otro dispositivo', body: 'Ya actualizamos tu estado. Revísalo antes de registrar de nuevo.'};
-    case 'FORBIDDEN': return {title: 'No tienes permiso', body: message || 'Esta acción no está disponible para tu cuenta.'};
-    case 'NOT_FOUND': return {title: 'Ya no está disponible', body: message || 'Es posible que haya cambiado mientras lo veías.'};
-    case 'VALIDATION': return {title: 'Revisa lo que escribiste', body: message || 'El servidor no aceptó ese dato.'};
+    case 'INVALID_CREDENTIALS':
+      return {title: 'Matrícula o PIN incorrectos', body: 'Revisa tus datos y vuelve a intentarlo.'};
+    case 'RATE_LIMITED':
+      return {title: 'Demasiados intentos', body: 'Espera un momento antes de intentarlo otra vez.'};
+    case 'UNAUTHENTICATED':
+      return {title: 'Tu sesión venció', body: 'Vuelve a entrar para continuar.'};
+    case 'CONNECT_UNREACHABLE':
+      return {title: 'No se pudo llegar al servidor', body: 'Revisa el Wi-Fi, la dirección y el puerto del servidor.'};
+    case 'CONNECT_TLS':
+      return {
+        title: 'Conexión segura rechazada',
+        body: 'El certificado del servidor no es válido para esta dirección. Avisa a quien lo administra.',
+      };
+    case 'CONNECT_CLOSED':
+      return {title: 'Se perdió la conexión', body: 'Volveremos a intentarlo automáticamente.'};
+    case 'CONNECT_OFFLINE':
+      return {title: 'Sin conexión', body: 'Esta acción necesita conexión con el servidor.'};
+    case 'CONNECT_CONFIG':
+      return {title: 'Instalación incompleta', body: 'Esta copia de la app no incluye el certificado de instalación.'};
+    case 'CONFLICT':
+      return {
+        title: 'Tu asistencia cambió en otro dispositivo',
+        body: 'Ya actualizamos tu estado. Revísalo antes de registrar de nuevo.',
+      };
+    case 'FORBIDDEN':
+      return {title: 'No tienes permiso', body: message || 'Esta acción no está disponible para tu cuenta.'};
+    case 'NOT_FOUND':
+      return {title: 'Ya no está disponible', body: message || 'Es posible que haya cambiado mientras lo veías.'};
+    case 'VALIDATION':
+      return {title: 'Revisa lo que escribiste', body: message || 'El servidor no aceptó ese dato.'};
     case 'UNAVAILABLE':
-    case 'INTERNAL': return {title: 'El servidor no pudo responder', body: 'Inténtalo de nuevo en un momento.'};
-    default: return {title: 'Algo salió mal', body: message || 'Inténtalo de nuevo.'};
+    case 'INTERNAL':
+      return {title: 'El servidor no pudo responder', body: 'Inténtalo de nuevo en un momento.'};
+    default:
+      return {title: 'Algo salió mal', body: message || 'Inténtalo de nuevo.'};
   }
 }
 
@@ -186,6 +239,7 @@ export function canSearchDirectory(text: string) {
 /** Resumen de lo que espera confirmación: «3 mensajes esperando confirmación». */
 export function pendingLabel(count: number, type: string | null) {
   if (!count) return '';
-  if (type === 'messages.send') return count === 1 ? '1 mensaje esperando confirmación' : `${count} mensajes esperando confirmación`;
+  if (type === 'messages.send')
+    return count === 1 ? '1 mensaje esperando confirmación' : `${count} mensajes esperando confirmación`;
   return 'Una operación esperando confirmación';
 }

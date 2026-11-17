@@ -1,5 +1,6 @@
 package wasap
 
+import kotlinx.serialization.json.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.ZoneId
@@ -7,7 +8,6 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
-import kotlinx.serialization.json.*
 
 private fun env(name: String, fallback: String? = null): String = System.getenv(name)?.takeIf { it.isNotBlank() }
     ?: fallback ?: error("Set $name")
@@ -16,7 +16,11 @@ private fun readPin(): String {
     val console = System.console()
     return if (console != null) {
         val chars = console.readPassword("PIN (6–12 dígitos): ") ?: error("PIN required")
-        try { String(chars) } finally { chars.fill('\u0000') }
+        try {
+            String(chars)
+        } finally {
+            chars.fill('\u0000')
+        }
     } else {
         System.err.println("PIN (stdin; usa una terminal interactiva para ocultar la entrada):")
         readlnOrNull() ?: error("PIN required")
@@ -46,15 +50,20 @@ fun main(args: Array<String>) {
                         require(args.size == 5) { "admin users add MATRICULA 'Nombre completo'" }
                         println(service.createUser(args[3], args[4], readPin()).toJson())
                     }
+
                     listOf("users", "reset-pin") -> {
                         require(args.size == 4) { "admin users reset-pin MATRICULA" }
-                        service.resetPin(args[3], readPin()); println("PIN actualizado; sesiones anteriores invalidadas")
+                        service.resetPin(args[3], readPin())
+                        println("PIN actualizado; sesiones anteriores invalidadas")
                     }
+
                     listOf("users", "logout") -> {
                         require(args.size == 4) { "admin users logout MATRICULA" }
                         println("Sesiones cerradas: ${service.logoutUser(args[3])}")
                     }
+
                     listOf("users", "list") -> println(json(service.users()))
+
                     else -> {
                         require(args.getOrNull(1) == "attendance" && args.size in 3..6) { "admin attendance MATRICULA|* [DESDE YYYY-MM-DD] [HASTA YYYY-MM-DD] [CURSOR]" }
                         val p = obj("from" to args.getOrNull(3), "to" to args.getOrNull(4), "before" to args.getOrNull(5), "limit" to 100)
@@ -74,7 +83,13 @@ fun main(args: Array<String>) {
                 val expiry = Tls.earliestExpiry(keystore, keystorePassword)
                 maintenance.every(24, TimeUnit.HOURS, "certificate expiry check") { Tls.expiryWarning(expiry)?.let(System.err::println) }
                 val stop = CountDownLatch(1)
-                Runtime.getRuntime().addShutdownHook(Thread { maintenance.close(); server.close(); stop.countDown() })
+                Runtime.getRuntime().addShutdownHook(
+                    Thread {
+                        maintenance.close()
+                        server.close()
+                        stop.countDown()
+                    },
+                )
                 server.start()
                 println("WASAP TLS/TCP listening on port ${server.port}; database ready")
                 stop.await()

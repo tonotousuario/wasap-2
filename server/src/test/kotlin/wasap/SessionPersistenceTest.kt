@@ -1,11 +1,11 @@
 package wasap
 
-import java.security.MessageDigest
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import java.security.MessageDigest
 import kotlin.test.*
 
 /** Integration tests for persist-sessions over real TLS sockets and PostgreSQL. */
@@ -17,7 +17,10 @@ class SessionPersistenceTest {
         env = TestServer()
         env.service.createUser("A001", "Ana", "123456")
     }
-    @AfterEach fun cleanup() { if (::env.isInitialized) env.close() }
+
+    @AfterEach fun cleanup() {
+        if (::env.isInitialized) env.close()
+    }
 
     private fun sessionRows() = env.db.transaction { c ->
         c.rows("SELECT encode(token_hash,'hex') AS h, user_id::text AS u, credential_version AS v, expires_at AS e FROM sessions")

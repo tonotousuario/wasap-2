@@ -1,10 +1,10 @@
 package wasap
 
+import kotlinx.serialization.json.*
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
-import kotlinx.serialization.json.*
 
 class ApiError(val code: String, override val message: String) : RuntimeException(message)
 fun invalid(message: String): Nothing = throw ApiError("VALIDATION", message)
@@ -22,7 +22,9 @@ fun JsonObject.string(key: String): String = (get(key) as? JsonPrimitive)?.takeI
 fun JsonObject.optional(key: String): String? = if (get(key) == null || get(key) == JsonNull) null else string(key)
 fun uuid(value: String): String = try {
     UUID.fromString(value).toString().also { if (it != value.lowercase()) invalid("UUID inválido") }
-} catch (_: IllegalArgumentException) { invalid("UUID inválido") }
+} catch (_: IllegalArgumentException) {
+    invalid("UUID inválido")
+}
 fun JsonObject.uuid(key: String): String = wasap.uuid(string(key))
 fun JsonObject.limit(): Int {
     val value = get("limit") ?: return 50

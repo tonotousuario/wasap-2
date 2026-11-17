@@ -1,12 +1,12 @@
 package wasap
 
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Tag
 import kotlin.test.*
 
 @Tag("integration")
@@ -15,16 +15,23 @@ class TlsServerTest {
         val dir = Files.createTempDirectory("wasap-expiry-test")
         try {
             fun keystore(days: Int): java.nio.file.Path {
-                val key = dir.resolve("k$days.pem"); val cert = dir.resolve("c$days.pem"); val store = dir.resolve("s$days.p12")
+                val key = dir.resolve("k$days.pem")
+                val cert = dir.resolve("c$days.pem")
+                val store = dir.resolve("s$days.p12")
                 fun run(vararg command: String) {
                     val process = ProcessBuilder(*command).redirectErrorStream(true).start()
                     val output = process.inputStream.bufferedReader().readText()
-                    assertTrue(process.waitFor(30, TimeUnit.SECONDS)); assertEquals(0, process.exitValue(), output)
+                    assertTrue(process.waitFor(30, TimeUnit.SECONDS))
+                    assertEquals(0, process.exitValue(), output)
                 }
-                run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "$days", "-subj", "/CN=WASAP Test",
-                    "-keyout", key.toString(), "-out", cert.toString())
-                run("openssl", "pkcs12", "-export", "-name", "wasap", "-inkey", key.toString(), "-in", cert.toString(),
-                    "-out", store.toString(), "-passout", "pass:secreto")
+                run(
+                    "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "$days", "-subj", "/CN=WASAP Test",
+                    "-keyout", key.toString(), "-out", cert.toString(),
+                )
+                run(
+                    "openssl", "pkcs12", "-export", "-name", "wasap", "-inkey", key.toString(), "-in", cert.toString(),
+                    "-out", store.toString(), "-passout", "pass:secreto",
+                )
                 Tls.serverContext(store, "secreto") // still a valid keystore for serving
                 return store
             }
@@ -32,7 +39,9 @@ class TlsServerTest {
             assertNotNull(soon)
             assertTrue(soon.contains("expires on") && soon.contains("create-certs.sh"), soon)
             assertNull(Tls.expiryWarning(Tls.earliestExpiry(keystore(200), "secreto")))
-        } finally { dir.toFile().deleteRecursively() }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
     }
 
     @Test fun `tls authenticates frames rejects invalid peers and enforces logout and session invalidation`() {
@@ -63,8 +72,12 @@ class TlsServerTest {
                     Frames.write(socket.outputStream, obj("v" to 1, "kind" to "request", "id" to id, "type" to type, "payload" to payload))
                     while (true) {
                         val frame = Frames.read(socket.inputStream)!!
-                        if (frame.string("kind") == "event") events.add(frame)
-                        else { assertEquals(id, frame.string("id")); return frame }
+                        if (frame.string("kind") == "event") {
+                            events.add(frame)
+                        } else {
+                            assertEquals(id, frame.string("id"))
+                            return frame
+                        }
                     }
                 }
                 connect().use { socket ->
@@ -93,9 +106,14 @@ class TlsServerTest {
                 // The signed certificate intentionally has only IP SANs, not localhost DNS.
                 assertFails { connect("localhost").close() }
                 assertFails {
-                    (javax.net.ssl.SSLContext.getDefault().socketFactory.createSocket("127.0.0.1", server.port) as SSLSocket).use { it.soTimeout = 5000; it.startHandshake() }
+                    (javax.net.ssl.SSLContext.getDefault().socketFactory.createSocket("127.0.0.1", server.port) as SSLSocket).use {
+                        it.soTimeout = 5000
+                        it.startHandshake()
+                    }
                 }
-            } finally { server.close() }
+            } finally {
+                server.close()
+            }
         }
         DriverManager.getConnection(url, user, password).use { c -> c.createStatement().use { it.execute("DROP SCHEMA $schema CASCADE") } }
         dir.toFile().deleteRecursively()

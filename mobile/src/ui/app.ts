@@ -3,8 +3,18 @@ import {Keyboard, Platform} from 'react-native';
 import {engine} from '../native';
 import type {Conversation, User} from '../types';
 
-export type Route = {name: 'thread'; id: string} | {name: 'members'; id: string} | {name: 'newChat'} | {name: 'newGroup'} | {name: 'server'};
-export type Navigation = {push(route: Route): void; pop(): void; replace(route: Route): void; home(notice?: string): void};
+export type Route =
+  | {name: 'thread'; id: string}
+  | {name: 'members'; id: string}
+  | {name: 'newChat'}
+  | {name: 'newGroup'}
+  | {name: 'server'};
+export type Navigation = {
+  push(route: Route): void;
+  pop(): void;
+  replace(route: Route): void;
+  home(notice?: string): void;
+};
 export const Nav = createContext<Navigation>({push() {}, pop() {}, replace() {}, home() {}});
 export const useNav = () => useContext(Nav);
 export const useEngine = () => useSyncExternalStore(engine.subscribe, engine.snapshot);
@@ -17,9 +27,16 @@ export const run = (task: Promise<unknown>) => {
 export function useKeyboardVisible() {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
-    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setVisible(true));
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setVisible(false));
-    return () => {show.remove(); hide.remove();};
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () =>
+      setVisible(true),
+    );
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () =>
+      setVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
   return visible;
 }
@@ -38,7 +55,10 @@ const peers = new Map<string, string>();
 const peerListeners = new Set<() => void>();
 const asked = new Set<string>();
 let peerVersion = 0;
-const peerChanged = () => {peerVersion++; peerListeners.forEach(listener => listener());};
+const peerChanged = () => {
+  peerVersion++;
+  peerListeners.forEach(listener => listener());
+};
 export function rememberPeer(conversationId: string, name: string) {
   if (peers.get(conversationId) === name) return;
   peers.set(conversationId, name);
@@ -51,8 +71,19 @@ export function forgetLocalData() {
   peerChanged();
 }
 export function usePeers(conversations: Conversation[], online: boolean) {
-  useSyncExternalStore(listener => {peerListeners.add(listener); return () => {peerListeners.delete(listener);};}, () => peerVersion);
-  const missing = conversations.filter(c => c.kind === 'DIRECT' && !c.peer && !peers.has(c.id) && !asked.has(c.id)).map(c => c.id).join(',');
+  useSyncExternalStore(
+    listener => {
+      peerListeners.add(listener);
+      return () => {
+        peerListeners.delete(listener);
+      };
+    },
+    () => peerVersion,
+  );
+  const missing = conversations
+    .filter(c => c.kind === 'DIRECT' && !c.peer && !peers.has(c.id) && !asked.has(c.id))
+    .map(c => c.id)
+    .join(',');
   useEffect(() => {
     if (!online || !missing) return;
     let cancelled = false;
@@ -71,7 +102,9 @@ export function usePeers(conversations: Conversation[], online: boolean) {
         }
       }
     })();
-    return () => {cancelled = true;};
+    return () => {
+      cancelled = true;
+    };
   }, [online, missing]);
   return peers;
 }

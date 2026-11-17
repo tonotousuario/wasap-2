@@ -21,6 +21,7 @@ object Tls {
         km.init(store, password.toCharArray())
         return SSLContext.getInstance("TLS").apply { init(km.keyManagers, null, null) }
     }
+
     /** Earliest notAfter of every certificate chain in the keystore. */
     fun earliestExpiry(keystore: Path, password: String): Instant {
         val store = KeyStore.getInstance("PKCS12")
@@ -30,10 +31,12 @@ object Tls {
     }
 
     /** Operator warning when the server certificate expires within [threshold], otherwise null. */
-    fun expiryWarning(expiry: Instant, now: Instant = Instant.now(), threshold: Duration = Duration.ofDays(30)): String? =
-        if (Duration.between(now, expiry) >= threshold) null
-        else "WARNING: TLS certificate expires on $expiry (${Duration.between(now, expiry).toDays()} days). " +
+    fun expiryWarning(expiry: Instant, now: Instant = Instant.now(), threshold: Duration = Duration.ofDays(30)): String? = if (Duration.between(now, expiry) >= threshold) {
+        null
+    } else {
+        "WARNING: TLS certificate expires on $expiry (${Duration.between(now, expiry).toDays()} days). " +
             "Renew it with scripts/create-certs.sh using the same CA and restart the server."
+    }
 
     fun clientContext(ca: Path): SSLContext {
         val store = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null, null) }

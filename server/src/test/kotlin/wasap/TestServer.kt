@@ -1,5 +1,6 @@
 package wasap
 
+import kotlinx.serialization.json.*
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
@@ -7,7 +8,6 @@ import java.sql.DriverManager
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
-import kotlinx.serialization.json.*
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -32,13 +32,23 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
 
     private fun start(port: Int) {
         val storePassword = Files.readString(certs.resolve("keystore-password")).trim()
-        server = TcpServer(service, db, Tls.serverContext(certs.resolve("server.p12"), storePassword), "127.0.0.1", port,
-            Sessions(DatabaseSessionStore(db), clock))
+        server = TcpServer(
+            service,
+            db,
+            Tls.serverContext(certs.resolve("server.p12"), storePassword),
+            "127.0.0.1",
+            port,
+            Sessions(DatabaseSessionStore(db), clock),
+        )
         server.start()
     }
 
     /** Simulates a server restart: a new TcpServer with empty memory on the same port and database. */
-    fun restart() { val port = server.port; server.close(); start(port) }
+    fun restart() {
+        val port = server.port
+        server.close()
+        start(port)
+    }
 
     fun connect(receiveBuffer: Int? = null): Client {
         val socket = Tls.clientContext(certs.resolve("ca.crt")).socketFactory.createSocket() as SSLSocket
@@ -65,12 +75,15 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
             send(type, payload, id)
             while (true) {
                 val frame = Frames.read(socket.inputStream) ?: error("Connection closed")
-                if (frame.string("kind") == "event") events.add(frame)
-                else { assertEquals(id, frame.string("id")); return frame }
+                if (frame.string("kind") == "event") {
+                    events.add(frame)
+                } else {
+                    assertEquals(id, frame.string("id"))
+                    return frame
+                }
             }
         }
-        fun send(type: String, payload: JsonObject = obj(), id: String = UUID.randomUUID().toString()) =
-            Frames.write(socket.outputStream, obj("v" to 1, "kind" to "request", "id" to id, "type" to type, "payload" to payload))
+        fun send(type: String, payload: JsonObject = obj(), id: String = UUID.randomUUID().toString()) = Frames.write(socket.outputStream, obj("v" to 1, "kind" to "request", "id" to id, "type" to type, "payload" to payload))
         fun ok(type: String, payload: JsonObject = obj(), id: String = UUID.randomUUID().toString()): JsonObject {
             val reply = request(type, payload, id)
             assertEquals("success", reply.string("type"), reply.toString())
@@ -82,8 +95,12 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
             return reply["payload"]!!.jsonObject.string("code")
         }
         fun login(matricula: String, pin: String) = ok("auth.login", obj("matricula" to matricula, "pin" to pin))
+
         /** Collects events already queued for this socket, using a ping as an ordering barrier. */
-        fun drain(): List<String> { ok("ping"); return events.map { it.string("type") } }
+        fun drain(): List<String> {
+            ok("ping")
+            return events.map { it.string("type") }
+        }
         override fun close() = socket.close()
     }
 

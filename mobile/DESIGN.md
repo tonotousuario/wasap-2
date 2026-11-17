@@ -2,215 +2,215 @@
 name: WASAP móvil
 description: Sátira cariñosa del mensajero verde cuya pantalla protagonista pasa lista; solo muestra lo que el servidor confirmó.
 colors:
-  primary: "#0A7C5A"
-  onPrimary: "#FFFFFF"
-  primarySoft: "#DDF3E9"
-  onPrimarySoft: "#07513B"
-  brand: "#1FCB6B"
-  onBrand: "#04130D"
-  bar: "#0A7C5A"
-  onBar: "#FFFFFF"
-  onBarSoft: "#E6F5EE"
-  bg: "#FFFFFF"
-  bgAlt: "#F2F5F3"
-  chatBg: "#EEE9DF"
-  surface: "#FFFFFF"
-  line: "#E1E7E3"
-  outline: "#74837C"
-  text: "#111B17"
-  textSoft: "#54645D"
-  bubbleOwn: "#D7F8CF"
-  bubbleOther: "#FFFFFF"
-  onBubbleSoft: "#4C5E55"
-  danger: "#B3261E"
-  dangerSoft: "#FCE9E7"
-  onDangerSoft: "#7A1A14"
-  warnSoft: "#FFF0C7"
-  onWarnSoft: "#5C3B00"
-  neutralSoft: "#E7ECE9"
+  primary: '#0A7C5A'
+  onPrimary: '#FFFFFF'
+  primarySoft: '#DDF3E9'
+  onPrimarySoft: '#07513B'
+  brand: '#1FCB6B'
+  onBrand: '#04130D'
+  bar: '#0A7C5A'
+  onBar: '#FFFFFF'
+  onBarSoft: '#E6F5EE'
+  bg: '#FFFFFF'
+  bgAlt: '#F2F5F3'
+  chatBg: '#EEE9DF'
+  surface: '#FFFFFF'
+  line: '#E1E7E3'
+  outline: '#74837C'
+  text: '#111B17'
+  textSoft: '#54645D'
+  bubbleOwn: '#D7F8CF'
+  bubbleOther: '#FFFFFF'
+  onBubbleSoft: '#4C5E55'
+  danger: '#B3261E'
+  dangerSoft: '#FCE9E7'
+  onDangerSoft: '#7A1A14'
+  warnSoft: '#FFF0C7'
+  onWarnSoft: '#5C3B00'
+  neutralSoft: '#E7ECE9'
 typography:
   display:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "34px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '34px'
     fontWeight: 700
-    lineHeight: "40px"
+    lineHeight: '40px'
   title:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "22px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '22px'
     fontWeight: 500
-    lineHeight: "28px"
+    lineHeight: '28px'
   heading:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "17px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '17px'
     fontWeight: 600
-    lineHeight: "24px"
+    lineHeight: '24px'
   body:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "16px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '16px'
     fontWeight: 400
-    lineHeight: "23px"
+    lineHeight: '23px'
   label:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "15px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '15px'
     fontWeight: 600
-    lineHeight: "20px"
+    lineHeight: '20px'
   small:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "14px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '14px'
     fontWeight: 400
-    lineHeight: "20px"
+    lineHeight: '20px'
   caption:
-    fontFamily: "system-ui (Roboto en Android, SF en iPhone)"
-    fontSize: "13px"
+    fontFamily: 'system-ui (Roboto en Android, SF en iPhone)'
+    fontSize: '13px'
     fontWeight: 400
-    lineHeight: "18px"
+    lineHeight: '18px'
 rounded:
-  field: "8px"
-  bubble: "14px"
-  block: "16px"
-  button: "24px"
+  field: '8px'
+  bubble: '14px'
+  block: '16px'
+  button: '24px'
 spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "12px"
-  lg: "16px"
-  xl: "24px"
-  xxl: "32px"
+  xs: '4px'
+  sm: '8px'
+  md: '12px'
+  lg: '16px'
+  xl: '24px'
+  xxl: '32px'
 components:
   button-filled:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.onPrimary}"
-    typography: "{typography.label}"
-    rounded: "{rounded.button}"
-    padding: "8px 24px"
-    height: "48px"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.onPrimary}'
+    typography: '{typography.label}'
+    rounded: '{rounded.button}'
+    padding: '8px 24px'
+    height: '48px'
   button-filled-large:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.onPrimary}"
-    typography: "{typography.heading}"
-    rounded: "28px"
-    padding: "8px 24px"
-    height: "56px"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.onPrimary}'
+    typography: '{typography.heading}'
+    rounded: '28px'
+    padding: '8px 24px'
+    height: '56px'
   button-filled-disabled:
-    backgroundColor: "{colors.neutralSoft}"
-    textColor: "{colors.textSoft}"
+    backgroundColor: '{colors.neutralSoft}'
+    textColor: '{colors.textSoft}'
   button-tonal:
-    backgroundColor: "{colors.primarySoft}"
-    textColor: "{colors.onPrimarySoft}"
-    typography: "{typography.label}"
-    rounded: "{rounded.button}"
-    padding: "8px 24px"
-    height: "48px"
+    backgroundColor: '{colors.primarySoft}'
+    textColor: '{colors.onPrimarySoft}'
+    typography: '{typography.label}'
+    rounded: '{rounded.button}'
+    padding: '8px 24px'
+    height: '48px'
   button-text:
-    backgroundColor: "transparent"
-    textColor: "{colors.primary}"
-    typography: "{typography.label}"
-    padding: "8px 12px"
-    height: "48px"
+    backgroundColor: 'transparent'
+    textColor: '{colors.primary}'
+    typography: '{typography.label}'
+    padding: '8px 12px'
+    height: '48px'
   button-danger:
-    backgroundColor: "transparent"
-    textColor: "{colors.danger}"
-    typography: "{typography.label}"
-    rounded: "{rounded.button}"
-    padding: "8px 12px"
-    height: "48px"
+    backgroundColor: 'transparent'
+    textColor: '{colors.danger}'
+    typography: '{typography.label}'
+    rounded: '{rounded.button}'
+    padding: '8px 12px'
+    height: '48px'
   field:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
-    typography: "{typography.body}"
-    rounded: "{rounded.field}"
-    padding: "10px 12px"
-    height: "52px"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.text}'
+    typography: '{typography.body}'
+    rounded: '{rounded.field}'
+    padding: '10px 12px'
+    height: '52px'
   chip:
-    backgroundColor: "transparent"
-    textColor: "{colors.text}"
-    typography: "{typography.small}"
-    rounded: "8px"
-    padding: "0 16px"
-    height: "36px"
+    backgroundColor: 'transparent'
+    textColor: '{colors.text}'
+    typography: '{typography.small}'
+    rounded: '8px'
+    padding: '0 16px'
+    height: '36px'
   chip-selected:
-    backgroundColor: "{colors.primarySoft}"
-    textColor: "{colors.onPrimarySoft}"
-    padding: "0 12px"
+    backgroundColor: '{colors.primarySoft}'
+    textColor: '{colors.onPrimarySoft}'
+    padding: '0 12px'
   top-bar:
-    backgroundColor: "{colors.bar}"
-    textColor: "{colors.onBar}"
-    typography: "{typography.title}"
-    height: "56px"
+    backgroundColor: '{colors.bar}'
+    textColor: '{colors.onBar}'
+    typography: '{typography.title}'
+    height: '56px'
   tab-bar:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.textSoft}"
-    height: "72px"
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.textSoft}'
+    height: '72px'
   tab-pill-selected:
-    backgroundColor: "{colors.primarySoft}"
-    textColor: "{colors.onPrimarySoft}"
-    rounded: "{rounded.block}"
-    padding: "4px 20px"
+    backgroundColor: '{colors.primarySoft}'
+    textColor: '{colors.onPrimarySoft}'
+    rounded: '{rounded.block}'
+    padding: '4px 20px'
   notice-warn:
-    backgroundColor: "{colors.warnSoft}"
-    textColor: "{colors.onWarnSoft}"
-    rounded: "{rounded.block}"
-    padding: "12px 16px"
+    backgroundColor: '{colors.warnSoft}'
+    textColor: '{colors.onWarnSoft}'
+    rounded: '{rounded.block}'
+    padding: '12px 16px'
   notice-error:
-    backgroundColor: "{colors.dangerSoft}"
-    textColor: "{colors.onDangerSoft}"
-    rounded: "{rounded.block}"
-    padding: "12px 16px"
+    backgroundColor: '{colors.dangerSoft}'
+    textColor: '{colors.onDangerSoft}'
+    rounded: '{rounded.block}'
+    padding: '12px 16px'
   notice-ok:
-    backgroundColor: "{colors.primarySoft}"
-    textColor: "{colors.onPrimarySoft}"
-    rounded: "{rounded.block}"
-    padding: "12px 16px"
+    backgroundColor: '{colors.primarySoft}'
+    textColor: '{colors.onPrimarySoft}'
+    rounded: '{rounded.block}'
+    padding: '12px 16px'
   notice-info:
-    backgroundColor: "{colors.neutralSoft}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.block}"
-    padding: "12px 16px"
+    backgroundColor: '{colors.neutralSoft}'
+    textColor: '{colors.text}'
+    rounded: '{rounded.block}'
+    padding: '12px 16px'
   seal:
-    backgroundColor: "{colors.brand}"
-    textColor: "{colors.onBrand}"
-    size: "24px"
+    backgroundColor: '{colors.brand}'
+    textColor: '{colors.onBrand}'
+    size: '24px'
   status-block-inside:
-    backgroundColor: "{colors.primarySoft}"
-    textColor: "{colors.onPrimarySoft}"
-    typography: "{typography.display}"
-    rounded: "20px"
-    padding: "24px"
+    backgroundColor: '{colors.primarySoft}'
+    textColor: '{colors.onPrimarySoft}'
+    typography: '{typography.display}'
+    rounded: '20px'
+    padding: '24px'
   status-block-neutral:
-    backgroundColor: "{colors.neutralSoft}"
-    textColor: "{colors.text}"
-    typography: "{typography.display}"
-    rounded: "20px"
-    padding: "24px"
+    backgroundColor: '{colors.neutralSoft}'
+    textColor: '{colors.text}'
+    typography: '{typography.display}'
+    rounded: '20px'
+    padding: '24px'
   bubble-own:
-    backgroundColor: "{colors.bubbleOwn}"
-    textColor: "{colors.text}"
-    typography: "{typography.body}"
-    rounded: "{rounded.bubble}"
-    padding: "7px 12px 6px"
+    backgroundColor: '{colors.bubbleOwn}'
+    textColor: '{colors.text}'
+    typography: '{typography.body}'
+    rounded: '{rounded.bubble}'
+    padding: '7px 12px 6px'
   bubble-other:
-    backgroundColor: "{colors.bubbleOther}"
-    textColor: "{colors.text}"
-    typography: "{typography.body}"
-    rounded: "{rounded.bubble}"
-    padding: "7px 12px 6px"
+    backgroundColor: '{colors.bubbleOther}'
+    textColor: '{colors.text}'
+    typography: '{typography.body}'
+    rounded: '{rounded.bubble}'
+    padding: '7px 12px 6px'
   composer-input:
-    backgroundColor: "{colors.bgAlt}"
-    textColor: "{colors.text}"
-    typography: "{typography.body}"
-    rounded: "24px"
-    padding: "12px 16px"
-    height: "48px"
+    backgroundColor: '{colors.bgAlt}'
+    textColor: '{colors.text}'
+    typography: '{typography.body}'
+    rounded: '24px'
+    padding: '12px 16px'
+    height: '48px'
   send-button:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.onPrimary}"
-    rounded: "24px"
-    size: "48px"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.onPrimary}'
+    rounded: '24px'
+    size: '48px'
   fab:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.onPrimary}"
-    rounded: "{rounded.block}"
-    size: "56px"
+    backgroundColor: '{colors.primary}'
+    textColor: '{colors.onPrimary}'
+    rounded: '{rounded.block}'
+    size: '56px'
 ---
 
 # Design System: WASAP móvil

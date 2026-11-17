@@ -1,12 +1,12 @@
 package wasap
 
+import kotlinx.serialization.json.*
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
-import kotlinx.serialization.json.*
 
 class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
     private val mutations = setOf("attendance.mark", "conversations.direct", "groups.create", "groups.add", "groups.remove", "messages.send")
@@ -45,10 +45,12 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             c.exec("DELETE FROM sessions WHERE user_id=?::uuid", id.string("id"))
         }
     }
+
     /** Ends every session of the user (lost phone); returns how many were closed. */
     fun logoutUser(matricula: String): Int = db.transaction { c ->
         c.exec("DELETE FROM sessions WHERE user_id=?::uuid", user(c, matricula).string("id"))
     }
+
     // Use an independently salted dummy hash to perform comparable work for unknown accounts.
     private val dummyHash by lazy { Pins.hash("000000") }
     fun authenticate(matricula: String, pin: String): User {
@@ -64,25 +66,39 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             if (c.rows("SELECT id FROM users WHERE id=?::uuid FOR NO KEY UPDATE", userId).isEmpty()) throw ApiError("UNAUTHENTICATED", "Usuario no encontrado")
             val previous = c.rows("SELECT operation, payload::text, result::text FROM processed_requests WHERE user_id=?::uuid AND request_id=?::uuid", userId, requestId).firstOrNull()
             if (previous != null) {
-                if (previous.string("operation") != operation || Json.parseToJsonElement(previous.string("payload")) != payload)
+                if (previous.string("operation") != operation || Json.parseToJsonElement(previous.string("payload")) != payload) {
                     throw ApiError("REQUEST_ID_REUSED", "El identificador ya fue usado para otra solicitud")
+                }
                 // A stored reply is not permission to regain access to a revoked conversation.
-                if (operation.startsWith("groups.") && operation != "groups.create" || operation == "messages.send")
+                if ((operation.startsWith("groups.") && operation != "groups.create") || operation == "messages.send") {
                     conversation(c, userId, payload.uuid("conversationId"))
+                }
                 Json.parseToJsonElement(previous.string("result")).jsonObject
             } else {
                 perform(c, userId, operation, payload).also { result ->
                     c.exec("INSERT INTO processed_requests(user_id,request_id,operation,payload,result) VALUES (?::uuid,?::uuid,?,?::jsonb,?::jsonb)", userId, requestId, operation, payload.toString(), result.toString())
                 }
             }
-        } else perform(c, userId, operation, payload)
+        } else {
+            perform(c, userId, operation, payload)
+        }
     }
 
     private fun conversation(c: Connection, uid: String, cid: String, lock: Boolean = false, shared: Boolean = false): JsonObject {
-        val row = c.rows("SELECT $conversationColumns FROM conversations c WHERE c.id=?::uuid${if (lock) " FOR UPDATE OF c" else if (shared) " FOR SHARE OF c" else ""}", cid).firstOrNull()
+        val row = c.rows(
+            "SELECT $conversationColumns FROM conversations c WHERE c.id=?::uuid${if (lock) {
+                " FOR UPDATE OF c"
+            } else if (shared) {
+                " FOR SHARE OF c"
+            } else {
+                ""
+            }}",
+            cid,
+        ).firstOrNull()
             ?: throw ApiError("NOT_FOUND", "Conversación no encontrada")
-        if (row.string("kind") != "GENERAL" && c.rows("SELECT user_id FROM conversation_members WHERE conversation_id=?::uuid AND user_id=?::uuid", cid, uid).isEmpty())
+        if (row.string("kind") != "GENERAL" && c.rows("SELECT user_id FROM conversation_members WHERE conversation_id=?::uuid AND user_id=?::uuid", cid, uid).isEmpty()) {
             throw ApiError("FORBIDDEN", "No perteneces a esta conversación")
+        }
         return row
     }
     private fun withPeer(c: Connection, uid: String, row: JsonObject): JsonObject {
@@ -90,6 +106,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         val peer = c.rows("SELECT u.id::text,u.matricula,u.name FROM users u JOIN conversation_members cm ON cm.user_id=u.id WHERE cm.conversation_id=?::uuid AND u.id<>?::uuid", row.string("id"), uid).single()
         return JsonObject(row + ("peer" to peer))
     }
+
     /**
      * Users whose conversation list changed after a committed membership operation: current
      * members of the conversation, plus the removed member for groups.remove.
@@ -100,7 +117,14 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         if (operation == "groups.remove") c.rows("SELECT id::text FROM users WHERE matricula=?", matricula(payload.string("matricula"))).firstOrNull()?.let { users += it.string("id") }
         users
     }
-    fun canAccess(uid: String, cid: String): Boolean = try { db.transaction { conversation(it, uid, cid); true } } catch (_: ApiError) { false }
+    fun canAccess(uid: String, cid: String): Boolean = try {
+        db.transaction {
+            conversation(it, uid, cid)
+            true
+        }
+    } catch (_: ApiError) {
+        false
+    }
     private fun lastEvent(c: Connection, uid: String) = c.rows("SELECT $eventColumns FROM attendance_events WHERE user_id=?::uuid ORDER BY seq DESC LIMIT 1", uid).firstOrNull()
     private fun nextType(event: JsonObject?) = if (event?.string("type") == "ENTRY") "EXIT" else "ENTRY"
 
@@ -113,7 +137,9 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val q = raw.substring(0, raw.offsetByCodePoints(0, minOf(length, 120)))
             obj("users" to c.rows("SELECT $userColumns FROM users WHERE strpos(lower(matricula), lower(?))>0 OR strpos(lower(name), lower(?))>0 ORDER BY matricula LIMIT 100", q, q))
         }
+
         "attendance.state" -> lastEvent(c, uid).let { obj("lastEvent" to it, "nextType" to nextType(it), "timezone" to zone.id, "today" to LocalDate.now(zone).toString()) }
+
         "attendance.mark" -> {
             if (!p.containsKey("expectedLastEventId")) invalid("Se requiere expectedLastEventId")
             val previous = lastEvent(c, uid)
@@ -122,15 +148,23 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val event = c.rows("INSERT INTO attendance_events(id,user_id,type) VALUES (?::uuid,?::uuid,?) RETURNING $eventColumns", UUID.randomUUID().toString(), uid, nextType(previous)).single()
             obj("event" to event, "nextType" to nextType(event))
         }
+
         "attendance.list" -> attendance(c, uid, p)
+
         "conversations.list" -> {
             val after = p.optional("after")?.let(::uuid)
             val limit = p.limit()
-            val items = c.rows("""
+            val items = c.rows(
+                """
                 SELECT $conversationColumns FROM conversations c
                 WHERE (c.kind='GENERAL' OR EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id=c.id AND cm.user_id=?::uuid))
                 AND (?::uuid IS NULL OR c.id>?::uuid) ORDER BY c.id LIMIT ?
-            """, uid, after, after, limit + 1)
+            """,
+                uid,
+                after,
+                after,
+                limit + 1,
+            )
             var bytes = 0
             // ponytail: at most 100 peer lookups per page; batch if directory latency becomes a problem.
             val page = items.take(limit).map { withPeer(c, uid, it) }.takeWhile { item ->
@@ -139,17 +173,23 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             }
             obj("conversations" to page, "nextCursor" to if (items.size > page.size) page.last().string("id") else null)
         }
+
         "conversations.direct" -> {
             val peer = user(c, p.string("matricula")).string("id")
             if (peer == uid) invalid("Selecciona otra matrícula")
             val key = listOf(uid, peer).sorted().joinToString(":")
-            val cid = c.rows("""
+            val cid = c.rows(
+                """
                 INSERT INTO conversations(id,kind,name,direct_key) VALUES (?::uuid,'DIRECT','Privado',?)
                 ON CONFLICT (direct_key) DO UPDATE SET direct_key=EXCLUDED.direct_key RETURNING id::text
-            """, UUID.randomUUID().toString(), key).single().string("id")
+            """,
+                UUID.randomUUID().toString(),
+                key,
+            ).single().string("id")
             listOf(uid, peer).forEach { c.exec("INSERT INTO conversation_members(conversation_id,user_id) VALUES (?::uuid,?::uuid) ON CONFLICT DO NOTHING", cid, it) }
             obj("conversation" to withPeer(c, uid, conversation(c, uid, cid)))
         }
+
         "groups.create" -> {
             val name = text(p.string("name"), 80, "Nombre del grupo")
             val members = p["matriculas"] as? JsonArray ?: invalid("matriculas debe ser una lista")
@@ -161,11 +201,13 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             ids.forEach { c.exec("INSERT INTO conversation_members(conversation_id,user_id) VALUES (?::uuid,?::uuid)", cid, it) }
             obj("conversation" to conversation(c, uid, cid))
         }
+
         "groups.members" -> {
             val cid = p.uuid("conversationId")
             conversation(c, uid, cid, shared = true)
             obj("members" to c.rows("SELECT u.id::text,u.matricula,u.name FROM users u JOIN conversation_members cm ON cm.user_id=u.id WHERE cm.conversation_id=?::uuid ORDER BY u.matricula", cid))
         }
+
         "groups.add", "groups.remove" -> {
             val cid = p.uuid("conversationId")
             val group = conversation(c, uid, cid, lock = true)
@@ -182,6 +224,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             }
             obj()
         }
+
         "messages.send" -> {
             val cid = p.uuid("conversationId")
             val body = text(p.string("text"), 4000, "Mensaje")
@@ -191,6 +234,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             c.exec("INSERT INTO messages(id,conversation_id,seq,sender_id,text) VALUES (?::uuid,?::uuid,?,?::uuid,?)", id, cid, seq, uid, body)
             obj("message" to c.rows("SELECT $messageColumns FROM messages m JOIN users u ON u.id=m.sender_id WHERE m.id=?::uuid", id).single())
         }
+
         "messages.list" -> {
             val cid = p.uuid("conversationId")
             conversation(c, uid, cid, shared = true)
@@ -198,11 +242,19 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val after = p.cursor("after")
             if (before != null && after != null) invalid("Usa before o after, no ambos")
             val limit = p.limit()
-            val items = c.rows("""
+            val items = c.rows(
+                """
                 SELECT $messageColumns FROM messages m JOIN users u ON u.id=m.sender_id
                 WHERE m.conversation_id=?::uuid AND (?::bigint IS NULL OR m.seq < ?::bigint) AND (?::bigint IS NULL OR m.seq > ?::bigint)
                 ORDER BY m.seq ${if (after != null) "ASC" else "DESC"} LIMIT ?
-            """, cid, before, before, after, after, limit + 1)
+            """,
+                cid,
+                before,
+                before,
+                after,
+                after,
+                limit + 1,
+            )
             // Bound the encoded bytes, not just row count: unicode text can use several bytes per character.
             var bytes = 0
             val selected = items.take(limit).takeWhile { item ->
@@ -212,10 +264,17 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val page = if (after == null) selected.reversed() else selected
             obj("messages" to page, "nextCursor" to if (items.size > selected.size) (if (after == null) page.first() else page.last()).string("seq") else null)
         }
+
         else -> invalid("Operación desconocida")
     }
 
-    private fun date(value: String?) = value?.let { try { LocalDate.parse(it) } catch (_: Exception) { invalid("Fecha inválida; usa YYYY-MM-DD") } }
+    private fun date(value: String?) = value?.let {
+        try {
+            LocalDate.parse(it)
+        } catch (_: Exception) {
+            invalid("Fecha inválida; usa YYYY-MM-DD")
+        }
+    }
     private fun attendance(c: Connection, uid: String?, p: JsonObject): JsonObject {
         val before = p.cursor("before")
         val from = date(p.optional("from"))
@@ -224,12 +283,15 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         val start = from?.atStartOfDay(zone)?.toInstant()
         val end = to?.plusDays(1)?.atStartOfDay(zone)?.toInstant()
         val limit = p.limit()
-        val items = c.rows("""
+        val items = c.rows(
+            """
             SELECT $eventColumns FROM attendance_events WHERE (?::uuid IS NULL OR user_id=?::uuid)
             AND (?::bigint IS NULL OR seq<?::bigint)
             AND (?::timestamptz IS NULL OR recorded_at>=?::timestamptz) AND (?::timestamptz IS NULL OR recorded_at<?::timestamptz)
             ORDER BY seq DESC LIMIT ?
-        """, uid, uid, before, before, start, start, end, end, limit + 1)
+        """,
+            uid, uid, before, before, start, start, end, end, limit + 1,
+        )
         val page = items.take(limit)
         return obj("events" to page, "nextCursor" to if (items.size > limit) page.last().string("seq") else null)
     }
@@ -243,15 +305,21 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         }
         JsonObject(result + ("events" to JsonArray(events)))
     }
+
     /** Deletes processed requests older than [retentionDays], in batches to keep locks short. */
     fun purgeProcessedRequests(retentionDays: Int): Int {
         require(retentionDays >= 1)
         var total = 0
         while (true) {
-            val deleted = db.transaction { it.exec("""
+            val deleted = db.transaction {
+                it.exec(
+                    """
                 DELETE FROM processed_requests WHERE ctid IN (
                     SELECT ctid FROM processed_requests WHERE created_at < now() - make_interval(days => ?) LIMIT 10000)
-            """, retentionDays) }
+            """,
+                    retentionDays,
+                )
+            }
             total += deleted
             if (deleted < 10000) return total
         }

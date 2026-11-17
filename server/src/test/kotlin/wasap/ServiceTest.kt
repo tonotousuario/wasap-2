@@ -1,17 +1,17 @@
 package wasap
 
+import kotlinx.serialization.json.*
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
 import java.sql.DriverManager
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
-import java.util.concurrent.Executors
 import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import kotlinx.serialization.json.*
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.AfterEach
 import kotlin.test.*
 
 @Tag("integration")
@@ -34,6 +34,7 @@ class ServiceTest {
         b = service.createUser("B001", "Beto", "654321")
         outsider = service.createUser("C001", "Caro", "111111")
     }
+
     @AfterEach fun cleanup() {
         if (::db.isInitialized) db.close()
         DriverManager.getConnection(url, user, password).use { c -> c.createStatement().use { it.execute("DROP SCHEMA IF EXISTS $schema CASCADE") } }
@@ -58,11 +59,17 @@ class ServiceTest {
     @Test fun `concurrent stale attendance requests produce exactly one movement`() {
         val gate = CyclicBarrier(2)
         Executors.newVirtualThreadPerTaskExecutor().use { pool ->
-            val results = (1..2).map { pool.submit<String> {
-                gate.await()
-                try { call(a, "attendance.mark", obj("expectedLastEventId" to null)); "OK" }
-                catch (e: ApiError) { e.code }
-            } }.map { it.get() }.sorted()
+            val results = (1..2).map {
+                pool.submit<String> {
+                    gate.await()
+                    try {
+                        call(a, "attendance.mark", obj("expectedLastEventId" to null))
+                        "OK"
+                    } catch (e: ApiError) {
+                        e.code
+                    }
+                }
+            }.map { it.get() }.sorted()
             assertEquals(listOf("CONFLICT", "OK"), results)
         }
         assertEquals(1, call(a, "attendance.list")["events"]!!.jsonArray.size)
@@ -95,9 +102,11 @@ class ServiceTest {
         assertEquals(zone.id, state.string("timezone"))
         assertTrue(state.string("today") in setOf(before, LocalDate.now(zone).toString()))
         val instants = listOf("2026-11-13T05:59:59.999Z", "2026-11-13T06:00:00Z", "2026-11-14T05:59:59.999Z", "2026-11-14T06:00:00Z")
-        db.transaction { c -> instants.forEach { instant ->
-            c.exec("INSERT INTO attendance_events(id,user_id,type,recorded_at) VALUES (?::uuid,?::uuid,'ENTRY',?::timestamptz)", UUID.randomUUID().toString(), a.id, instant)
-        } }
+        db.transaction { c ->
+            instants.forEach { instant ->
+                c.exec("INSERT INTO attendance_events(id,user_id,type,recorded_at) VALUES (?::uuid,?::uuid,'ENTRY',?::timestamptz)", UUID.randomUUID().toString(), a.id, instant)
+            }
+        }
         val filtered = call(a, "attendance.list", obj("from" to "2026-11-13", "to" to "2026-11-13", "limit" to 1))
         assertEquals(listOf("2026-11-14T05:59:59.999Z"), filtered["events"]!!.jsonArray.map { it.jsonObject.string("recordedAt") })
         val older = call(a, "attendance.list", obj("from" to "2026-11-13", "to" to "2026-11-13", "before" to filtered.string("nextCursor")))
