@@ -3,7 +3,7 @@
 ## 1. Formateo
 
 - [x] 1.1 Añadir `.editorconfig`, Prettier fijado en `mobile/` con script `format` y ktlint en `server/build.gradle.kts`; verificar con `npm run format -- --check` y `./gradlew ktlintCheck` que la configuración carga (deben reportar diferencias, no errores)
-- [ ] 1.2 Reformatear todo en un commit aislado, añadir su hash a `.git-blame-ignore-revs` y verificar que `./gradlew test`, `npm test` y `npx tsc --noEmit` siguen pasando
+- [x] 1.2 Reformatear todo en un commit aislado, añadir su hash a `.git-blame-ignore-revs` y verificar que `./gradlew test`, `npm test` y `npx tsc --noEmit` siguen pasando
 
 ## 2. Android
 
