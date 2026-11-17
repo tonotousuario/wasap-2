@@ -43,9 +43,9 @@ export function Login() {
       <View style={{gap: space.sm}}>
         <Text
           accessibilityRole="header"
-          style={{fontSize: 40, lineHeight: 46, fontWeight: '800', letterSpacing: 1, color: c.primary}}
+          style={{fontSize: 40, lineHeight: 46, fontWeight: '800', letterSpacing: 0.2, color: c.primary}}
         >
-          WASAP
+          Wasap
         </Text>
         <Text style={[type.body, {color: c.textSoft}]}>
           Pasa lista y chatea con tu grupo. Cualquier parecido con otro mensajero es pura coincidencia.
@@ -197,7 +197,7 @@ export function ServerScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[type.body, {color: c.textSoft}]}>
-          La dirección del servidor WASAP de tu institución dentro de la red local.
+          La dirección del servidor Wasap de tu institución dentro de la red local.
         </Text>
         <Field
           label="IP o nombre"

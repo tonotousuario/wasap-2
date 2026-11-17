@@ -1,5 +1,5 @@
 ---
-name: WASAP móvil
+name: Wasap móvil
 description: Sátira cariñosa del mensajero verde cuya pantalla protagonista pasa lista; solo muestra lo que el servidor confirmó.
 colors:
   primary: '#0A7C5A'
@@ -213,7 +213,7 @@ components:
     size: '56px'
 ---
 
-# Design System: WASAP móvil
+# Design System: Wasap móvil
 
 Este documento registra el sistema tal como quedó construido en `mobile/src` (React Native / Expo, plataforma adaptativa). La fuente normativa de los valores es `mobile/src/ui/theme.ts`; los componentes viven en `mobile/src/ui/kit.tsx`. Las unidades `px` del encabezado son puntos independientes de densidad (dp en Android, pt en iPhone). Los valores del encabezado son los de **Android en esquema claro**, la única combinación capturada y revisada (emulador 360×640 dp, `.impeccable/review/mobile-android-*.png`). El sistema de la presentación (`DESIGN.md` en la raíz) es otro mundo y no aplica aquí.
 
@@ -229,7 +229,7 @@ Este documento registra el sistema tal como quedó construido en `mobile/src` (R
 
 **Creative North Star: "La palomita honesta"**
 
-WASAP es una sátira cariñosa del mensajero verde: se ve y se usa como el chat que cualquier estudiante ya domina, pero su pantalla protagonista pasa lista. La familiaridad es deliberada (barra verde, burbujas con cola, fondo de chat color arena, botón flotante para chat nuevo) y la broma se dice en voz baja, en el texto: «Cualquier parecido con otro mensajero es pura coincidencia».
+Wasap es una sátira cariñosa del mensajero verde: se ve y se usa como el chat que cualquier estudiante ya domina, pero su pantalla protagonista pasa lista. La familiaridad es deliberada (barra verde, burbujas con cola, fondo de chat color arena, botón flotante para chat nuevo) y la broma se dice en voz baja, en el texto: «Cualquier parecido con otro mensajero es pura coincidencia».
 
 Lo que lo separa del original es una regla de honestidad. La interfaz solo afirma lo que el servidor confirmó. Un reloj significa «enviado, pendiente de confirmación»; una sola palomita significa «guardado por el servidor»; un sello verde brillante marca la asistencia confirmada. No hay doble palomita azul, ni «en línea», ni contadores de no leídos, porque el servidor no tiene esos datos.
 
@@ -250,7 +250,7 @@ Una familia de verdes sobre blanco, con arena para el chat y tres superficies to
 
 ### Primary
 
-- **Verde WASAP profundo** (`primary`, igual a `bar` en Android): superficie de la barra superior y de la acción principal (botón lleno, botón de enviar, botón flotante). Como tinta marca lo accionable o afirmativo: botones de texto, borde del campo enfocado, nombre del remitente en grupos, icono de entrada en el historial, casilla seleccionada.
+- **Verde Wasap profundo** (`primary`, igual a `bar` en Android): superficie de la barra superior y de la acción principal (botón lleno, botón de enviar, botón flotante). Como tinta marca lo accionable o afirmativo: botones de texto, borde del campo enfocado, nombre del remitente en grupos, icono de entrada en el historial, casilla seleccionada.
 - **Verde pálido** (`primarySoft` con `onPrimarySoft`): superficie tonal del estado «Dentro», del aviso de confirmación, del chip seleccionado, de la píldora de la pestaña activa, de los botones tonales y de la etiqueta «Creó el grupo».
 
 ### Secondary
@@ -300,7 +300,7 @@ Seis pares de tono para avatares de personas están escritos directamente en `ki
 - **Small** (400, 14/20): cuerpo de avisos, detalle de filas, vista previa de mensajes, ayudas. Con 600 hace de encabezado de día y de texto de chip.
 - **Caption** (400, 13/18): subtítulo de barra, ayuda y error de campo, hora en la lista, píldora de día en el chat.
 
-Fuera de la escala de `theme.ts`, tal como está construido: la marca «WASAP» se compone en texto (800, interletrado 1; 40/46 en el acceso y 34 en el arranque) porque no existe logotipo; y un tamaño de 12/16 se repite en la etiqueta de pestaña, la hora de la burbuja y el rótulo «Pendiente de confirmación».
+Fuera de la escala de `theme.ts`, tal como está construido: la marca «Wasap» se compone en texto (800, interletrado 1; 40/46 en el acceso y 34 en el arranque) porque no existe logotipo; y un tamaño de 12/16 se repite en la etiqueta de pestaña, la hora de la burbuja y el rótulo «Pendiente de confirmación».
 
 ### Named Rules
 

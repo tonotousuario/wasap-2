@@ -1,4 +1,4 @@
-# WASAP móvil
+# Wasap móvil
 
 Aplicación Expo 58 / React Native 0.88 para Android e iOS. Incluye servidor configurable, sesión por matrícula/PIN, asistencia, historial paginado, chat general/privado/grupal y administración de miembros por el creador. La comunicación usa TCP con TLS y el protocolo de [../docs/protocol.md](../docs/protocol.md).
 
@@ -84,7 +84,7 @@ adb -s emulator-5554 reverse tcp:8081 tcp:8081
 adb -s emulator-5554 reverse --list
 ```
 
-En WASAP configura **127.0.0.1**, puerto **5050**. El reenvío hace que ese puerto
+En Wasap configura **127.0.0.1**, puerto **5050**. El reenvío hace que ese puerto
 del emulador llegue al servidor del equipo. El certificado del servidor debe
 incluir `127.0.0.1` en su SAN y estar firmado por la CA incorporada a la app.
 Repite los reenvíos si reinicias o reconectas el emulador. Esta ruta evita depender
@@ -98,9 +98,9 @@ export WASAP_CA_PEM="$(cat ../certs/ca.crt)"
 npm start -- --localhost
 ```
 
-Abre WASAP en el emulador y selecciona el servidor de desarrollo de Metro.
+Abre Wasap en el emulador y selecciona el servidor de desarrollo de Metro.
 El puerto 8081 sirve el JavaScript de desarrollo; 5050 es la conexión TCP/TLS de
-WASAP. Si falta el binario de la app o cambiaste dependencias nativas, usa el
+Wasap. Si falta el binario de la app o cambiaste dependencias nativas, usa el
 procedimiento de [compilación local Android](#compilación-local-android).
 Para cambios de interfaz basta con Metro y recargar la app.
 
@@ -139,7 +139,7 @@ Para un iPhone físico:
 npx expo run:ios --device
 ```
 
-También puedes abrir `ios/WASAP.xcworkspace` en Xcode, seleccionar tu equipo en **Signing & Capabilities**, elegir el dispositivo y ejecutar. Para archivar selecciona **Any iOS Device** y **Product → Archive**. La firma de un dispositivo/distribución requiere la cuenta Apple correspondiente. No cambies las validaciones TLS para resolver problemas de firma o de red. Autoriza **Red local** al iniciar la app; puedes restablecer el permiso en Ajustes.
+También puedes abrir `ios/Wasap.xcworkspace` en Xcode, seleccionar tu equipo en **Signing & Capabilities**, elegir el dispositivo y ejecutar. Para archivar selecciona **Any iOS Device** y **Product → Archive**. La firma de un dispositivo/distribución requiere la cuenta Apple correspondiente. No cambies las validaciones TLS para resolver problemas de firma o de red. Autoriza **Red local** al iniciar la app; puedes restablecer el permiso en Ajustes.
 
 ## EAS
 

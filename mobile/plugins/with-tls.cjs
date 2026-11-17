@@ -14,7 +14,7 @@ module.exports = function withWasapTLS(config) {
   }
   config = withInfoPlist(config, mod => {
     mod.modResults.NSLocalNetworkUsageDescription =
-      'WASAP se conecta al servidor de asistencia y mensajes de tu institución en la red local.';
+      'Wasap se conecta al servidor de asistencia y mensajes de tu institución en la red local.';
     return mod;
   });
   config = withAndroidManifest(config, mod => {

@@ -10,13 +10,13 @@ adaptive
 Estudiantes con matrícula que registran su entrada/salida y se comunican por chat desde Android o iPhone dentro de una LAN; un administrador que da de alta usuarios y consulta asistencia por consola. Audiencia de presentaciones de avance: profesor y grupo de clase (revisión académica).
 
 ## Product Purpose
-WASAP 2 registra asistencia alternada (ENTRY/EXIT, sin reinicio diario) y ofrece chat general, privados y grupos, todo sobre un protocolo propio TCP+TLS sin HTTP. Éxito: cada operación confirmada se registra exactamente una vez, incluso con reintentos, pérdidas de respuesta o reinicios.
+Wasap 2 registra asistencia alternada (ENTRY/EXIT, sin reinicio diario) y ofrece chat general, privados y grupos, todo sobre un protocolo propio TCP+TLS sin HTTP. Éxito: cada operación confirmada se registra exactamente una vez, incluso con reintentos, pérdidas de respuesta o reinicios.
 
 ## Positioning
 Protocolo propio con tramas `uint32 longitud | JSON UTF-8` sobre TLS, idempotencia por UUID de solicitud y confirmación solo después del commit en PostgreSQL.
 
 ## Operating Context
-Servidor Kotlin/JVM 25 en Docker, PostgreSQL remoto (solo el servidor tiene credenciales), app Expo/React Native con CA de instalación embebida, puerto 5050 en LAN. La app es nativa y adapta su lenguaje visual por sistema (confirmado el 2026-11-13, sustituye la decisión anterior de un solo diseño compartido): convenciones de Material en Android y de iOS en iPhone, con la misma identidad WASAP, el mismo contenido y los mismos flujos. Uso real: teléfonos pequeños, una mano, teclado abierto y textos largos; interfaz en español.
+Servidor Kotlin/JVM 25 en Docker, PostgreSQL remoto (solo el servidor tiene credenciales), app Expo/React Native con CA de instalación embebida, puerto 5050 en LAN. La app es nativa y adapta su lenguaje visual por sistema (confirmado el 2026-11-13, sustituye la decisión anterior de un solo diseño compartido): convenciones de Material en Android y de iOS en iPhone, con la misma identidad Wasap, el mismo contenido y los mismos flujos. Uso real: teléfonos pequeños, una mano, teclado abierto y textos largos; interfaz en español.
 
 ## Capabilities and Constraints
 Grupos ≤100 miembros; mensajes de texto ≤4000 caracteres; sesiones de 24 h guardadas en PostgreSQL (solo el hash del token); sin push, adjuntos, panel web ni creación offline en v1.

@@ -188,7 +188,7 @@ export function Settings() {
           onPress={logout}
         />
         <Text style={[type.caption, {color: c.textSoft, textAlign: 'center'}]}>
-          WASAP · proyecto de la asignatura de Redes. No es, ni pretende ser, el otro mensajero verde.
+          Wasap · proyecto de la asignatura de Redes. No es, ni pretende ser, el otro mensajero verde.
         </Text>
       </View>
     </ScrollView>

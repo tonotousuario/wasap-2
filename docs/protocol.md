@@ -1,4 +1,4 @@
-# WASAP TCP protocol v1
+# Wasap TCP protocol v1
 
 All application traffic uses TLS 1.2 or newer over TCP. Default port: 5050.
 Each frame is `uint32 big-endian byte length | UTF-8 JSON`, length 1..65536.
@@ -22,6 +22,13 @@ Every other error is final and the client discards the pending mutation. In part
 `INTERNAL` covers deterministic failures (constraint violations, invalid data, bugs):
 nothing was committed and resending the same request would fail again. Error messages
 never include database text.
+
+## Frame layout
+
+```mermaid
+flowchart LR
+    L["4 bytes<br/>length: uint32 big-endian<br/>1..65536"] --> B["length bytes<br/>UTF-8 JSON object<br/>{v, kind, id, type, payload}"]
+```
 
 ## Operations
 
@@ -80,6 +87,27 @@ It is sent only to users affected by the operation: the members of the conversat
 after `conversations.direct` or a group mutation and, for `groups.remove`, the removed
 member.
 Clients always query histories after reconnect, and deduplicate by record id/seq.
+
+## Sessions: login, resume and revocation
+
+```mermaid
+sequenceDiagram
+    participant A as App
+    participant S as Server
+    participant D as PostgreSQL
+    A->>S: auth.login {matricula, pin}
+    S->>D: Verify PBKDF2 hash
+    S->>D: INSERT sessions (SHA-256 of token, max 5 per account)
+    S-->>A: {token, expiresAt, user}
+    Note over A: Token kept in the device secure store
+    A->>S: auth.resume {token} (after reconnect or server restart)
+    S->>D: Session exists, not expired, PIN version current?
+    S-->>A: {token, expiresAt, user} or UNAUTHENTICATED
+    Note over D: admin users reset-pin / logout deletes the rows
+    A->>S: Any request on a live socket
+    S->>D: Recheck at most every 5 s
+    S-->>A: UNAUTHENTICATED once the session is gone
+```
 
 ## Guarantees
 

@@ -24,7 +24,7 @@ import {android, space, type, useTheme} from './ui/theme';
 
 type Tab = 'attendance' | 'chats' | 'settings';
 const TABS: {id: Tab; label: string; icon: IconName; iconOn: IconName; title: string}[] = [
-  {id: 'attendance', label: 'Asistencia', icon: 'attendance', iconOn: 'attendanceOn', title: 'WASAP'},
+  {id: 'attendance', label: 'Asistencia', icon: 'attendance', iconOn: 'attendanceOn', title: 'Wasap'},
   {id: 'chats', label: 'Chats', icon: 'chats', iconOn: 'chatsOn', title: 'Chats'},
   {id: 'settings', label: 'Ajustes', icon: 'settings', iconOn: 'settingsOn', title: 'Ajustes'},
 ];
@@ -131,8 +131,8 @@ function Root() {
   if (!ready) {
     screen = (
       <View style={{flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, backgroundColor: c.bg}}>
-        <Text style={{fontSize: 34, fontWeight: '800', letterSpacing: 1, color: c.primary}}>WASAP</Text>
-        <ActivityIndicator accessibilityLabel="Abriendo WASAP" color={c.primary} />
+        <Text style={{fontSize: 34, fontWeight: '800', letterSpacing: 0.2, color: c.primary}}>Wasap</Text>
+        <ActivityIndicator accessibilityLabel="Abriendo Wasap" color={c.primary} />
       </View>
     );
   } else if (top?.name === 'server') {

@@ -11,7 +11,7 @@ No son mockups.
 
 | Entrada confirmada: Dentro | Salida confirmada: Fuera |
 | --- | --- |
-| <img src="images/android-attendance-inside.png" alt="WASAP Android: Dentro, entrada confirmada e historial" width="300"> | <img src="images/android-attendance-outside.png" alt="WASAP Android: Fuera, salida confirmada e historial" width="300"> |
+| <img src="images/android-attendance-inside.png" alt="Wasap Android: Dentro, entrada confirmada e historial" width="300"> | <img src="images/android-attendance-outside.png" alt="Wasap Android: Fuera, salida confirmada e historial" width="300"> |
 
 El servidor devolvió exactamente dos movimientos para DEMO002:
 
@@ -34,7 +34,7 @@ se añadió temporalmente a la base local una restricción que rechaza el texto 
 
 | En cola, servidor en pausa | Tras reanudar: enviados en orden y uno no enviado |
 | --- | --- |
-| <img src="images/android-outbox-queued.png" alt="WASAP Android: cuatro mensajes pendientes en orden con el compositor libre" width="300"> | <img src="images/android-outbox-failed.png" alt="WASAP Android: tres mensajes confirmados y uno marcado No enviado con acciones Copiar al cuadro y Descartar" width="300"> |
+| <img src="images/android-outbox-queued.png" alt="Wasap Android: cuatro mensajes pendientes en orden con el compositor libre" width="300"> | <img src="images/android-outbox-failed.png" alt="Wasap Android: tres mensajes confirmados y uno marcado No enviado con acciones Copiar al cuadro y Descartar" width="300"> |
 
 - Los cuatro quedaron «Pendiente» en el orden escrito y el compositor siguió libre.
 - Al reanudar, la base guardó una sola fila de «Cola 1», «Cola 2» y «Cola 3» con

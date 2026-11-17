@@ -1,6 +1,6 @@
-# Arquitectura y recorridos de WASAP
+# Arquitectura y recorridos de Wasap
 
-WASAP es un proyecto académico de redes: registra entrada/salida y ofrece
+Wasap es un proyecto académico de redes: registra entrada/salida y ofrece
 mensajería general, privada y de grupo. El servidor JVM decide la identidad,
 el orden de los registros y cuándo una operación queda confirmada.
 

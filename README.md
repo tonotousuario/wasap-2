@@ -1,12 +1,39 @@
-# WASAP 2 — asistencia y mensajería TCP
+<p align="center">
+  <img src="docs/images/banner.png" alt="Wasap: asistencia y chat por TCP + TLS. Solo muestra lo que el servidor confirmó." width="100%">
+</p>
 
-Servidor Kotlin/JVM 25 y aplicación Expo/React Native para Android e iPhone.
-Todo el tráfico de la aplicación usa el protocolo propio sobre TCP con TLS.
-PostgreSQL es remoto y solo el servidor conoce sus credenciales.
+# Wasap 2 — asistencia y mensajería TCP
 
-Incluye entrada/salida alternada sin límite diario, historial personal, chat
-general, privados, grupos y administración por consola. La secuencia de asistencia
-continúa entre días. Reintentar una operación confirmada no crea otro registro.
+Wasap pasa lista y deja chatear al grupo desde Android o iPhone dentro de la red
+local. Es una sátira cariñosa del mensajero verde con una regla seria: **la app solo
+muestra lo que el servidor confirmó**. Un reloj es «pendiente», una palomita es
+«guardado por el servidor» y reintentar nunca duplica un registro.
+
+- **Asistencia** alternada entrada/salida, sin reinicio diario, con historial propio.
+- **Chat** general, privados y grupos (hasta 100 integrantes), con cola de envío en orden.
+- **Protocolo propio** sobre TCP + TLS, sin HTTP, con idempotencia por UUID.
+- **Servidor** Kotlin/JVM 25 con PostgreSQL; solo el servidor conoce sus credenciales.
+
+<!-- GALLERY -->
+
+## Cómo encaja
+
+```mermaid
+flowchart LR
+    A["App Wasap<br/>Android · iPhone"] -->|"TCP + TLS · puerto 5050<br/>trama: longitud + JSON"| S["Servidor<br/>Kotlin · JVM 25"]
+    S -->|"JDBC · transacciones"| D[("PostgreSQL")]
+    Adm["Administración<br/>consola"] --> S
+    CA["CA de instalación"] -. "certificado público en la app" .-> A
+    CA -. "firma el certificado del servidor" .-> S
+```
+
+Cada mensaje del protocolo es una trama: 4 bytes con la longitud y, a continuación,
+un objeto JSON en UTF-8 ([contrato completo](docs/protocol.md)).
+
+```mermaid
+flowchart LR
+    L["4 bytes<br/>longitud uint32 big-endian<br/>1..65536"] --> B["JSON UTF-8<br/>{v, kind, id, type, payload}"]
+```
 
 ## Documentación y evidencia
 

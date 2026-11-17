@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Wasap: icono de app (iOS y tiendas)</title>
+  <rect width="1024" height="1024" fill="#0A7C5A"/>
+  <g transform="translate(248.0 267.4) scale(0.88)">
+  <defs>
+    <clipPath id="left-i"><rect x="-60" y="-60" width="360" height="700"/></clipPath>
+    <clipPath id="right-i"><rect x="300" y="-60" width="400" height="700"/></clipPath>
+  </defs>
+  <path d="M64,0 H536 A64,64 0 0 1 600,64 V176 A44,44 0 0 0 600,264 V376 A64,64 0 0 1 536,440 H150 L0,556 V264 A44,44 0 0 0 0,176 V64 A64,64 0 0 1 64,0 Z" fill="#EEE9DF"/>
+  <!-- Dashed half = pending, solid half = confirmed: the app's honest-state rule. -->
+  <path d="M64,0 H536 A64,64 0 0 1 600,64 V176 A44,44 0 0 0 600,264 V376 A64,64 0 0 1 536,440 H150 L0,556 V264 A44,44 0 0 0 0,176 V64 A64,64 0 0 1 64,0 Z" pathLength="1000" fill="none" stroke="#04130D" stroke-width="30" stroke-linejoin="round" stroke-dasharray="30 20" clip-path="url(#left-i)"/>
+  <path d="M0,264 A44,44 0 0 0 0,176" fill="none" stroke="#04130D" stroke-width="30" stroke-linecap="butt"/>
+  <path d="M64,0 H536 A64,64 0 0 1 600,64 V176 A44,44 0 0 0 600,264 V376 A64,64 0 0 1 536,440 H150 L0,556 V264 A44,44 0 0 0 0,176 V64 A64,64 0 0 1 64,0 Z" fill="none" stroke="#04130D" stroke-width="30" stroke-linejoin="round" clip-path="url(#right-i)"/>
+  <path d="M170,230 L260,320 L440,140" fill="none" stroke="#0A7C5A" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

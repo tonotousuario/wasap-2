@@ -15,7 +15,7 @@ Se ha iniciado con Podman (motor instalado, compatible con imágenes Docker).
 /home/kedap/Android/Sdk/platform-tools/adb reverse tcp:5050 tcp:5050
 ```
 
-Configurar en WASAP `127.0.0.1`, puerto `5050`. Matrícula inicial `DEMO001`,
+Configurar en Wasap `127.0.0.1`, puerto `5050`. Matrícula inicial `DEMO001`,
 PIN de demostración `123456`. Cambiarlo antes de usar datos reales.
 
 ## Operación
@@ -33,6 +33,32 @@ La imagen usada es `localhost/wasap-server:dev`. Para modificar el código del
 servidor hace falta reconstruirla y recrear su contenedor conservando los montajes,
 la red, variables de `.local/server.env` y el volumen PostgreSQL. La configuración
 Compose de producción permanece independiente y exige PostgreSQL remoto con TLS.
+
+## Despliegue local
+
+```mermaid
+flowchart LR
+    subgraph Host["Equipo anfitrión"]
+        C["certs/<br/>ca.crt · server.p12<br/>keystore-password · db-password"]
+        subgraph Net["Red de Compose (wasap-dev)"]
+            SV["server<br/>Kotlin · JVM 25<br/>usuario sin root, solo lectura"]
+            DB[("db<br/>PostgreSQL 17")]
+        end
+        V[("Volumen externo<br/>wasap-local-pgdata")]
+        P["127.0.0.1:5050"]
+    end
+    E["Emulador / teléfono<br/>(adb reverse o IP LAN)"]
+    C -. "montajes de solo lectura" .-> SV
+    C -. "contraseña" .-> DB
+    SV -->|"JDBC · db:5432"| DB
+    DB --- V
+    P --> SV
+    E -->|"TCP + TLS"| P
+```
+
+La base no publica puertos al anfitrión. El servidor aplica las migraciones
+(Flyway) antes de escuchar y solo se publica en `127.0.0.1:5050`; para teléfonos en
+la LAN usa `compose.yaml`, que publica el puerto en todas las interfaces.
 
 ## PostgreSQL y servidor con Compose (recomendado)
 
