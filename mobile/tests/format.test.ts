@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {classifyConnectFailure, ConnectError, errorCode} from '../src/errors.ts';
 import {ProtocolError} from '../src/state.ts';
-import {clock, conversationTitle, customRange, dayLabel, explainError, groupByDay, isoDate, linkState, maskDate, parseDisplayDate, presetRange, previewText, sortConversations} from '../src/format.ts';
+import {canSearchDirectory, clock, conversationTitle, customRange, dayLabel, explainError, groupByDay, isoDate, linkState, maskDate, parseDisplayDate, presetRange, previewText, sortConversations} from '../src/format.ts';
 import type {Conversation, Message} from '../src/types.ts';
 
 const now = new Date(2026, 10, 13, 9, 30);
@@ -98,4 +98,12 @@ test('previews name the sender and conversations sort by latest message', () => 
   assert.equal(previewText(undefined, 'GROUP', 'me'), 'Sin mensajes todavía');
   const sorted = sortConversations([conv('empty', 'GROUP', 'Vacío'), conv('old', 'DIRECT', 'Privado'), conv('new', 'GENERAL', 'General')], {old: [own], new: [other]});
   assert.deepEqual(sorted.map(c => c.id), ['new', 'old', 'empty']);
+});
+
+test('directory search needs at least three characters after trimming',()=>{
+  assert.equal(canSearchDirectory(''),false);
+  assert.equal(canSearchDirectory('  an  '),false);
+  assert.equal(canSearchDirectory('😀😀'),false); // two characters, four UTF-16 units
+  assert.equal(canSearchDirectory(' ana '),true);
+  assert.equal(canSearchDirectory('A01'),true);
 });

@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {FlatList, Pressable, RefreshControl, ScrollView, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {engine} from '../native';
-import {conversationTitle, explainError, kindLabel, listTime, previewText, sortConversations} from '../format';
+import {canSearchDirectory, conversationTitle, DIRECTORY_HINT, explainError, kindLabel, listTime, previewText, sortConversations} from '../format';
 import type {Conversation, User} from '../types';
 import {rememberPeer, run, useDebounced, useEngine, useNav, usePeers} from '../ui/app';
 import {Avatar, Button, Chip, Empty, Field, Icon, IconButton, Notice, PersonRow, SkeletonRows, TopBar} from '../ui/kit';
@@ -96,20 +96,23 @@ function useDirectory() {
   const [users, setUsers] = useState<User[] | null>(null);
   const [failed, setFailed] = useState('');
   const settled = useDebounced(query.trim());
+  const ready = canSearchDirectory(settled);
   useEffect(() => {
-    if (!state.online) return;
-    let cancelled = false;
     setFailed('');
-    engine.query('users.list', settled ? {query: settled} : {}).then(
+    // Solo búsquedas: sin 3 caracteres no se consulta el servidor ni se muestra a nadie.
+    if (!state.online || !ready) {setUsers(null); return;}
+    let cancelled = false;
+    engine.query('users.list', {query: settled}).then(
       result => {if (!cancelled) setUsers((result.users as User[]).filter(user => user.id !== engine.state.session?.user.id));},
       error => {if (!cancelled) setFailed(explainError(error?.code ?? '', error instanceof Error ? error.message : '').body);},
     );
     return () => {cancelled = true;};
-  }, [settled, state.online]);
-  return {query, setQuery, users, failed, searching: query.trim() !== settled};
+  }, [settled, ready, state.online]);
+  return {query, setQuery, users, failed, ready: canSearchDirectory(query), searching: query.trim() !== settled};
 }
 
-function DirectoryStatus({users, failed, online, query}: {users: User[] | null; failed: string; online: boolean; query: string}) {
+function DirectoryStatus({users, failed, online, query, ready}: {users: User[] | null; failed: string; online: boolean; query: string; ready: boolean}) {
+  if (!ready) return <Empty icon="search" title={DIRECTORY_HINT} body="Busca a la persona por su nombre o su matrícula." />;
   if (failed) return <Notice tone="error" title="No se pudo buscar" body={failed} style={{margin: space.lg}} />;
   if (!users) return online ? <View style={{paddingHorizontal: space.lg}}><SkeletonRows count={5} /></View> : <Empty icon="offline" title="Sin conexión" body="El directorio se consulta en el servidor. Vuelve a intentarlo al reconectar." />;
   if (!users.length) return <Empty icon="search" title={query ? 'Nadie coincide' : 'No hay más personas'} body={query ? `No encontramos a «${query}». Revisa el nombre o la matrícula.` : 'Cuando haya más cuentas en el servidor aparecerán aquí.'} />;
@@ -163,12 +166,12 @@ export function NewChat() {
               <SearchField query={directory.query} setQuery={directory.setQuery} />
               {!!problem && <Notice tone="error" title="No se pudo abrir el chat" body={problem} onClose={() => setProblem('')} />}
               {state.pending && <Notice tone="warn" title="Hay un envío pendiente de confirmar" body="Podrás abrir chats nuevos cuando se resuelva." />}
-              <Text accessibilityRole="header" style={[type.small, {color: c.textSoft, fontWeight: '600'}]}>Personas{directory.users?.length === 100 ? ' · primeras 100, busca para acotar' : ''}</Text>
+              <Text accessibilityRole="header" style={[type.small, {color: c.textSoft, fontWeight: '600'}]}>Personas{directory.users?.length === 100 ? ' · primeras 100, acota la búsqueda' : ''}</Text>
             </View>
           </View>
         }
         renderItem={({item}) => <PersonRow name={item.name} detail={item.matricula} disabled={locked} hint="Abre un chat privado" onPress={() => void open(item)} right={opening === item.id ? <Text style={[type.caption, {color: c.textSoft}]}>Abriendo…</Text> : undefined} />}
-        ListEmptyComponent={<DirectoryStatus users={directory.users} failed={directory.failed} online={state.online} query={directory.query.trim()} />}
+        ListEmptyComponent={<DirectoryStatus users={directory.users} failed={directory.failed} online={state.online} query={directory.query.trim()} ready={directory.ready} />}
       />
     </View>
   );
@@ -239,7 +242,7 @@ export function NewGroup() {
             </Pressable>
           );
         }}
-        ListEmptyComponent={<DirectoryStatus users={directory.users} failed={directory.failed} online={state.online} query={directory.query.trim()} />}
+        ListEmptyComponent={<DirectoryStatus users={directory.users} failed={directory.failed} online={state.online} query={directory.query.trim()} ready={directory.ready} />}
       />
       <View style={{padding: space.lg, paddingBottom: Math.max(insets.bottom, space.lg), gap: space.sm, borderTopWidth: 1, borderColor: c.line, backgroundColor: c.surface}}>
         {!!problem && <Notice tone={state.pending ? 'warn' : 'error'} title={state.pending ? 'Enviado, pendiente de confirmación' : 'No se creó el grupo'} body={problem} />}

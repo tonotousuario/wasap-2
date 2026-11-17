@@ -35,7 +35,7 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | auth.login | `{matricula,pin}` | `{token,expiresAt,user:{id,matricula,name}}` |
 | auth.resume | `{token}` | `{token,expiresAt,user:{id,matricula,name}}` |
 | auth.logout | `{}` | `{}` |
-| users.list | `{query?:string}` | `{users:[{id,matricula,name}]}` (max 100) |
+| users.list | `{query:string}` (≥3 characters after trimming) | `{users:[{id,matricula,name}]}` (max 100) |
 | attendance.state | `{}` | `{lastEvent:Event|null,nextType:"ENTRY"|"EXIT",timezone?:string,today?:"YYYY-MM-DD"}` |
 | attendance.mark | `{expectedLastEventId:UUID|null}` | `{event:Event,nextType}` |
 | attendance.list | `{before?:string,limit?:number,from?:"YYYY-MM-DD",to?:"YYYY-MM-DD"}` | `{events:[Event],nextCursor:string|null}` |
@@ -48,6 +48,10 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | messages.list | `{conversationId,before?:string,after?:string,limit?:number}` | `{messages:[Message],nextCursor:string|null}` |
 | messages.send | `{conversationId,text}` | `{message:Message}` |
 
+`users.list` is a search, never a full directory: `query` is required and must have at
+least 3 Unicode characters (code points) after trimming, otherwise VALIDATION. It
+matches matrícula or name case-insensitively and returns only `id`, `matricula` and
+`name` of at most 100 users ordered by matrícula.
 `Event={id,seq,type:"ENTRY"|"EXIT",recordedAt}`.
 `Conversation={id,kind:"GENERAL"|"DIRECT"|"GROUP",name,ownerId:UUID|null,lastSeq:string,peer?:{id,matricula,name}}`.
 `peer` identifies the other member of a DIRECT conversation from the requesting

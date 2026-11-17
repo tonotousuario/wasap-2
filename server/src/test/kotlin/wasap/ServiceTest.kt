@@ -136,7 +136,8 @@ class ServiceTest {
     @Test fun `credentials are checked without exposing pin hashes in directory`() {
         assertEquals(a, service.authenticate("a001", "123456"))
         assertEquals("INVALID_CREDENTIALS", assertFailsWith<ApiError> { service.authenticate("A001", "000000") }.code)
-        val directory = call(a, "users.list").toString()
+        val directory = call(a, "users.list", obj("query" to "001")).toString()
+        assertTrue(directory.contains("A001"))
         assertFalse(directory.contains("pin"))
         service.resetPin("A001", "121212")
         assertFailsWith<ApiError> { service.authenticate("A001", "123456") }
@@ -212,5 +213,14 @@ class ServiceTest {
         val remaining = db.transaction { c -> c.rows("SELECT request_id::text AS id FROM processed_requests") }.map { it.string("id") }
         assertEquals(listOf(recent), remaining)
         assertEquals(recentResult, call(a, "messages.send", recentPayload, recent), "recent retries still return the original result")
+    }
+
+    @Test fun `directory requires a search of at least three characters`() {
+        assertEquals("VALIDATION", assertFailsWith<ApiError> { call(a, "users.list") }.code)
+        assertEquals("VALIDATION", assertFailsWith<ApiError> { call(a, "users.list", obj("query" to "  be ")) }.code)
+        assertEquals("VALIDATION", assertFailsWith<ApiError> { call(a, "users.list", obj("query" to "😀😀")) }.code, "code points, not UTF-16 units")
+        val found = call(a, "users.list", obj("query" to " bet "))["users"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf(obj("id" to b.id, "matricula" to "B001", "name" to "Beto")), found, "only id, matricula and name")
+        assertEquals(listOf("C001"), call(a, "users.list", obj("query" to "c00"))["users"]!!.jsonArray.map { it.jsonObject.string("matricula") })
     }
 }

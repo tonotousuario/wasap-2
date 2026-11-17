@@ -106,7 +106,11 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
 
     private fun perform(c: Connection, uid: String, operation: String, p: JsonObject): JsonObject = when (operation) {
         "users.list" -> {
-            val q = p.optional("query")?.take(120) ?: ""
+            // Search only: never the whole directory. Counted in code points after trimming.
+            val raw = p.optional("query")?.trim() ?: ""
+            val length = raw.codePointCount(0, raw.length)
+            if (length < 3) invalid("Escribe al menos 3 letras o números para buscar")
+            val q = raw.substring(0, raw.offsetByCodePoints(0, minOf(length, 120)))
             obj("users" to c.rows("SELECT $userColumns FROM users WHERE strpos(lower(matricula), lower(?))>0 OR strpos(lower(name), lower(?))>0 ORDER BY matricula LIMIT 100", q, q))
         }
         "attendance.state" -> lastEvent(c, uid).let { obj("lastEvent" to it, "nextType" to nextType(it), "timezone" to zone.id, "today" to LocalDate.now(zone).toString()) }

@@ -176,3 +176,10 @@ export const LINK_LABEL: Record<Link, string> = {
   online: 'Conectado',
   offline: 'Sin conexión',
 };
+/** Mínimo de caracteres para consultar el directorio; el servidor exige lo mismo. */
+export const DIRECTORY_MIN = 3;
+export const DIRECTORY_HINT = 'Escribe al menos 3 letras o números';
+/** Si un texto ya alcanza para buscar personas (caracteres reales, sin espacios de borde). */
+export function canSearchDirectory(text: string) {
+  return [...text.trim()].length >= DIRECTORY_MIN;
+}

@@ -134,4 +134,13 @@ class HardeningTest {
             assertEquals(listOf(true, true, false), changedFor(a, b, c), "direct: both participants, nobody else")
         } } }
     }
+
+    @Test fun `directory search needs a session`() {
+        env.connect().use { c ->
+            assertEquals("UNAUTHENTICATED", c.errorCode("users.list", obj("query" to "beto")))
+            c.login("A001", "123456")
+            assertEquals("VALIDATION", c.errorCode("users.list"))
+            assertEquals(1, c.ok("users.list", obj("query" to "beto"))["users"]!!.jsonArray.size)
+        }
+    }
 }

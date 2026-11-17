@@ -2,7 +2,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Text, TextInput, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {engine} from '../native';
-import {clock, conversationTitle, dayKey, dayLabel, explainError, kindLabel} from '../format';
+import {canSearchDirectory, clock, conversationTitle, dayKey, dayLabel, DIRECTORY_HINT, explainError, kindLabel} from '../format';
 import type {Message, User} from '../types';
 import {drafts, unconfirmedSends, useDebounced, useEngine, useKeyboardVisible, useNav, usePeers} from '../ui/app';
 import {Avatar, Button, Empty, Field, Icon, IconButton, Notice, PersonRow, SectionTitle, SkeletonRows, TopBar} from '../ui/kit';
@@ -241,7 +241,7 @@ export function Members({id}: {id: string}) {
   };
   useEffect(() => {if (state.online) void load();}, [id, state.online]);
   useEffect(() => {
-    if (!creator || !settled || !state.online) return setFound(null);
+    if (!creator || !canSearchDirectory(settled) || !state.online) return setFound(null);
     let cancelled = false;
     engine.query('users.list', {query: settled}).then(result => {if (!cancelled) setFound(result.users);}, () => {if (!cancelled) setFound([]);});
     return () => {cancelled = true;};
@@ -302,6 +302,7 @@ export function Members({id}: {id: string}) {
             ) : (
               <Field label="Buscar por nombre o matrícula" value={query} onChangeText={setQuery} returnKeyType="search" right={<Icon name="search" size={22} color={c.textSoft} />} />
             )}
+            {!full && !canSearchDirectory(query) && <Text style={[type.small, {color: c.textSoft}]}>{DIRECTORY_HINT}.</Text>}
             {state.pending && !problem && <Text style={[type.small, {color: c.textSoft}]}>Hay un cambio pendiente de confirmar; espera a que se resuelva.</Text>}
           </View>
         ) : (
@@ -310,7 +311,7 @@ export function Members({id}: {id: string}) {
             <Text style={[type.small, {color: c.textSoft, flex: 1}]}>Solo quien creó el grupo puede añadir o quitar integrantes.</Text>
           </View>
         )}
-        {creator && !full && !!settled && (candidates === null ? (
+        {creator && !full && canSearchDirectory(settled) && (candidates === null ? (
           <View style={{paddingHorizontal: space.lg}}><SkeletonRows count={2} /></View>
         ) : !candidates.length ? (
           <Text style={[type.small, {color: c.textSoft, paddingHorizontal: space.lg}]}>Nadie más coincide con «{settled}».</Text>
