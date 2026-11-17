@@ -1,0 +1,46 @@
+# mobile-pending-operations Specification
+
+## Purpose
+
+Define el diario local de la app móvil que conserva una mutación enviada sin confirmar, para reconciliarla con el mismo UUID tras perder la respuesta o reiniciar la app, sin crear acciones sin conexión.
+
+## Requirements
+
+### Requirement: Guardar antes de enviar
+Antes de enviar una mutación, la app SHALL guardar de forma durable su UUID, tipo y payload; al recibir la confirmación SHALL borrarla.
+
+#### Scenario: Cierre de la app tras enviar
+- **WHEN** la app se cierra después de enviar y antes de la respuesta
+- **THEN** al volver a abrir conserva el pendiente y lo reenvía con el mismo UUID
+
+### Requirement: Una sola mutación pendiente
+La app SHALL permitir como máximo una mutación sin resolver; mientras exista, MUST NOT crear otra.
+
+#### Scenario: Segundo envío
+- **WHEN** hay un mensaje pendiente de confirmación y el usuario intenta otro
+- **THEN** la app lo impide e indica que espera la confirmación
+
+### Requirement: Sin acciones sin conexión
+La app MUST NOT crear mutaciones nuevas sin conexión; los borradores de mensajes y la selección de un grupo en curso se conservan.
+
+#### Scenario: Escribir sin red
+- **WHEN** el usuario intenta enviar un mensaje sin conexión
+- **THEN** el envío se bloquea y el borrador se conserva
+
+### Requirement: Pendiente ligado a servidor y usuario
+El pendiente SHALL estar ligado al servidor y al usuario; MUST NOT reenviarse a otro servidor ni con otra identidad. Cerrar sesión o iniciar sesión con otra cuenta lo descarta; volver a entrar con la misma cuenta tras `UNAUTHENTICATED` lo conserva.
+
+#### Scenario: Otra cuenta
+- **WHEN** inicia sesión un usuario distinto en el mismo teléfono
+- **THEN** el pendiente del anterior se descarta sin enviarse
+
+#### Scenario: Misma cuenta tras sesión vencida
+- **WHEN** la sesión vence y el mismo usuario vuelve a entrar
+- **THEN** el pendiente se reconcilia con su UUID original
+
+### Requirement: Aviso al cerrar sesión con pendiente
+Si hay un pendiente, la app SHALL advertir antes de cerrar sesión que se descartará y que no se sabrá desde la app si el servidor lo registró.
+
+#### Scenario: Cerrar sesión con pendiente
+- **WHEN** el usuario pide cerrar sesión con una operación sin confirmar
+- **THEN** ve la advertencia y puede cancelar
