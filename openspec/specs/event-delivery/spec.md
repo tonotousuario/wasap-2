@@ -7,18 +7,15 @@ Define quién recibe cada respuesta y evento enviado por socket, cómo se autori
 ## Requirements
 
 ### Requirement: Autorización de entrega de tramas sensibles
-Las tramas ligadas a una conversación (respuestas de `messages.list` y `groups.members`, eventos `message.created`) SHALL entregarse solo si, al momento de escribirlas, el destinatario autenticado sigue perteneciendo a la conversación; si no, se descartan.
+El servidor SHALL verificar, inmediatamente antes de escribir una trama ligada a una conversación (respuestas de `messages.list` y `groups.members`, eventos `message.created`), que el destinatario autenticado aún pertenece a ella. Si ya no pertenece, la trama SHALL descartarse sin escribirse. Una trama cuya verificación ocurra después del commit de una remoción MUST NOT entregarse a quien fue retirado.
 
 #### Scenario: Integrante retirado
-- **WHEN** un integrante es retirado antes de que se escriba un `message.created` pendiente para él
+- **WHEN** un integrante es retirado de un grupo y la remoción hace commit antes de que el servidor verifique una trama `message.created` pendiente para ese integrante
 - **THEN** la trama no se escribe en su socket
 
-### Requirement: Lock compartido durante la escritura
-La verificación de pertenencia SHALL mantener un lock compartido sobre la conversación hasta terminar la escritura de la trama; retirar integrantes toma el lock exclusivo, de modo que ninguna trama verificada se escribe después del commit de la remoción.
-
-#### Scenario: Remoción durante una escritura
-- **WHEN** una remoción se intenta mientras se escribe una trama verificada para ese integrante
-- **THEN** la remoción espera a que termine la escritura
+#### Scenario: Miembro vigente
+- **WHEN** se envía un mensaje a un grupo y el destinatario sigue siendo miembro al verificar
+- **THEN** recibe el evento `message.created`
 
 ### Requirement: Plazo de escritura
 Cada escritura de trama SHALL tener un plazo de 10 segundos; si se excede, el servidor SHALL cerrar ese socket.
@@ -42,11 +39,23 @@ Tras confirmar `messages.send`, el servidor SHALL emitir `message.created {messa
 - **THEN** los sockets de los miembros reciben `message.created` y los de usuarios ajenos no
 
 ### Requirement: Destinatarios de conversations.changed
-Tras `conversations.direct` y cualquier mutación de grupos, el servidor SHALL emitir `conversations.changed {}` a todos los sockets autenticados, que lo usan como señal para refrescar su lista.
+El evento `conversations.changed` SHALL entregarse solo a sockets autenticados de usuarios afectados: los miembros de la conversación tras la operación y, en `groups.remove`, el integrante retirado.
 
 #### Scenario: Grupo creado
 - **WHEN** un usuario crea un grupo
-- **THEN** todos los sockets autenticados reciben `conversations.changed`
+- **THEN** los integrantes del grupo reciben `conversations.changed` y los usuarios ajenos no
+
+#### Scenario: Usuario ajeno a un grupo
+- **WHEN** el creador agrega un integrante a un grupo
+- **THEN** los miembros del grupo reciben `conversations.changed` y un usuario que no es miembro no lo recibe
+
+#### Scenario: Integrante retirado del grupo
+- **WHEN** el creador retira a un integrante
+- **THEN** el integrante retirado recibe `conversations.changed`
+
+#### Scenario: Privado nuevo
+- **WHEN** un usuario abre un privado con otra matrícula
+- **THEN** ambos participantes reciben `conversations.changed` y nadie más
 
 ### Requirement: Destinatario de attendance.changed
 Tras `attendance.mark`, el servidor SHALL emitir `attendance.changed` con el estado de asistencia actualizado solo a los sockets autenticados del mismo usuario.
@@ -61,3 +70,14 @@ Un fallo al emitir eventos MUST NOT afectar la respuesta de la operación confir
 #### Scenario: Fallo al emitir
 - **WHEN** falla la preparación de un evento tras una mutación confirmada
 - **THEN** el remitente recibe igualmente su confirmación
+
+### Requirement: Sin recursos de base de datos durante la escritura al socket
+El servidor MUST NOT mantener conexiones, transacciones ni locks de base de datos mientras escribe bytes a un socket de cliente. La verificación de permiso SHALL terminar antes de iniciar la escritura.
+
+#### Scenario: Cliente que deja de leer
+- **WHEN** un cliente autenticado miembro del chat General deja de leer y su escritura queda bloqueada hasta el plazo de 10 s
+- **THEN** otros usuarios pueden enviar mensajes al chat General y el servidor sigue atendiendo requests sin errores `UNAVAILABLE` causados por ese bloqueo
+
+#### Scenario: Varios clientes lentos simultáneos
+- **WHEN** más clientes lentos que conexiones del pool de BD tienen escrituras bloqueadas
+- **THEN** los demás clientes siguen obteniendo respuestas a `ping` con `ready:true`
