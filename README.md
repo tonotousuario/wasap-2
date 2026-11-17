@@ -14,7 +14,13 @@ muestra lo que el servidor confirmó**. Un reloj es «pendiente», una palomita 
 - **Protocolo propio** sobre TCP + TLS, sin HTTP, con idempotencia por UUID.
 - **Servidor** Kotlin/JVM 25 con PostgreSQL; solo el servidor conoce sus credenciales.
 
-<!-- GALLERY -->
+## En pantalla
+
+Capturas reales de la alpha firmada en Android ([más en la verificación](docs/verification.md)).
+
+| Asistencia | Chats | Conversación | Integrantes |
+| --- | --- | --- | --- |
+| <img src="docs/images/wasap-attendance-in.png" alt="Asistencia: Dentro, entrada confirmada por el servidor" width="200"> | <img src="docs/images/wasap-chats.png" alt="Lista de chats: general, grupos y privados" width="200"> | <img src="docs/images/wasap-thread.png" alt="Chat general con mensajes confirmados con una sola palomita" width="200"> | <img src="docs/images/wasap-members.png" alt="Integrantes de un grupo con búsqueda para añadir" width="200"> |
 
 ## Cómo encaja
 

@@ -2,16 +2,28 @@
 
 Fecha de esta actualización: **14 de noviembre de 2026**.
 
-## Capturas reales de Android
+## Capturas de la alpha (17 de noviembre de 2026)
 
-Las imágenes corresponden al build instalado en `emulator-5554`, con código
-cargado desde Metro y conexión al servidor local mediante `adb reverse`.
-Muestran la cuenta DEMO002 y movimientos de prueba autorizados por el usuario.
-No son mockups.
+APK de release firmado con la clave de alpha, instalado en `emulator-5554` y
+conectado al servidor local con `adb reverse`. Cuenta DEMO001 y datos de prueba.
 
-| Entrada confirmada: Dentro | Salida confirmada: Fuera |
-| --- | --- |
-| <img src="images/android-attendance-inside.png" alt="Wasap Android: Dentro, entrada confirmada e historial" width="300"> | <img src="images/android-attendance-outside.png" alt="Wasap Android: Fuera, salida confirmada e historial" width="300"> |
+| Acceso | Servidor | Fuera | Dentro | Chats |
+| --- | --- | --- | --- | --- |
+| <img src="images/wasap-login.png" alt="Acceso con matrícula y PIN" width="150"> | <img src="images/wasap-server.png" alt="Configuración del servidor" width="150"> | <img src="images/wasap-attendance-out.png" alt="Asistencia: Fuera con historial" width="150"> | <img src="images/wasap-attendance-in.png" alt="Asistencia: Dentro, confirmada por el servidor" width="150"> | <img src="images/wasap-chats.png" alt="Lista de chats" width="150"> |
+
+| Conversación | Nuevo chat | Integrantes | Ajustes | Diagnóstico |
+| --- | --- | --- | --- | --- |
+| <img src="images/wasap-thread.png" alt="Chat general con mensajes confirmados" width="150"> | <img src="images/wasap-new-chat.png" alt="Nuevo chat con búsqueda de al menos 3 caracteres" width="150"> | <img src="images/wasap-members.png" alt="Integrantes de un grupo" width="150"> | <img src="images/wasap-settings.png" alt="Ajustes: conectado, servidor y cerrar sesión" width="150"> | <img src="images/wasap-diagnostics.png" alt="Diagnóstico técnico" width="150"> |
+
+Verificado con este APK: inicio de sesión, entrada confirmada, lista de chats,
+dos mensajes seguidos enviados en orden (secuencias 9 y 10) y reconexión sin pedir
+PIN tras reiniciar el servidor. Detalle pendiente: las iniciales del avatar propio
+en Integrantes salen como «U(» porque se calculan sobre «Usuario de prueba (tú)».
+
+## Verificación anterior (14 de noviembre de 2026)
+
+Con el build de desarrollo de entonces (cuenta DEMO002); sus capturas quedan en
+[el informe móvil](mobile-report.md).
 
 El servidor devolvió exactamente dos movimientos para DEMO002:
 
