@@ -20,9 +20,9 @@
 - [ ] 4.2 Rehacer la portada de `README.md`: presentación breve, galería de capturas en tabla, diagrama de arquitectura (Mermaid) y un diagrama de la trama del protocolo; verificar que GitHub renderiza Mermaid y que todos los enlaces de imágenes existen
 - [x] 4.3 Añadir diagramas donde falten: secuencia de login/reanudación con sesiones persistentes y revocación en `docs/protocol.md`, y despliegue (contenedores, red, volúmenes, certificados) en `docs/local-runtime.md`; actualizar `docs/verification.md` con la galería nueva y quitar capturas obsoletas; verificar con un comprobador de enlaces locales (script que valida cada `![...](ruta)` y `<img src>`)
 
-- [ ] 4.4 Identidad de app: explorar 3–4 conceptos de icono con Codex (generación de imágenes) sin parecido con el logotipo del mensajero original, elegir uno con el usuario, vectorizarlo en SVG y exportar `mobile/assets/` (icono 1024, primer plano y fondo del icono adaptativo de Android, monocromo, splash); registrarlos en `app.config.ts` y verificar en el AVD que el icono se ve en el lanzador y el splash al abrir
-- [ ] 4.5 Banner del README: ilustración generada con Codex más rótulo compuesto en SVG con el nombre real del producto; verificar que se ve en claro y oscuro y que todo raster generado conserva su prompt de procedencia (`impeccable embed-prompt --scan`)
+- [x] 4.4 Identidad de app: explorar 3–4 conceptos de icono con Codex (generación de imágenes) sin parecido con el logotipo del mensajero original, elegir uno con el usuario, vectorizarlo en SVG y exportar `mobile/assets/` (icono 1024, primer plano y fondo del icono adaptativo de Android, monocromo, splash); registrarlos en `app.config.ts` y verificar en el AVD que el icono se ve en el lanzador y el splash al abrir
+- [x] 4.5 Banner del README: ilustración generada con Codex más rótulo compuesto en SVG con el nombre real del producto; verificar que se ve en claro y oscuro y que todo raster generado conserva su prompt de procedencia (`impeccable embed-prompt --scan`)
 
 ## 5. Entrega
 
-- [ ] 5.1 Documentar en `mobile/README.md` la instalación de la alpha (APK y iOS), la IP o el certificado que necesita el tester y cómo reportar errores desde Diagnóstico; verificar siguiendo la guía en el AVD con el APK generado
+- [x] 5.1 Documentar en `mobile/README.md` la instalación de la alpha (APK y iOS), la IP o el certificado que necesita el tester y cómo reportar errores desde Diagnóstico; verificar siguiendo la guía en el AVD con el APK generado

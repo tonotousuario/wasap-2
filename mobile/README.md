@@ -2,6 +2,68 @@
 
 Aplicación Expo 58 / React Native 0.88 para Android e iOS. Incluye servidor configurable, sesión por matrícula/PIN, asistencia, historial paginado, chat general/privado/grupal y administración de miembros por el creador. La comunicación usa TCP con TLS y el protocolo de [../docs/protocol.md](../docs/protocol.md).
 
+## Instalar la alpha (testers)
+
+La alpha usa el servidor de tu institución dentro de la red local. Antes de instalar,
+pide a quien administra el servidor tres datos: **IP o nombre**, **puerto** (5050 por
+defecto) y tu **matrícula y PIN**. El certificado del servidor debe incluir en su SAN
+esa misma IP o nombre; si cambia la IP, quien administra el servidor emite un
+certificado nuevo con `scripts/create-certs.sh` y la app no necesita reinstalarse.
+
+### Android (APK)
+
+1. Descarga `wasap-alpha.apk` del enlace que te compartan.
+2. Ábrelo y permite «Instalar apps desconocidas» para el navegador o el gestor de
+   archivos cuando Android lo pida.
+3. Si tenías una versión de desarrollo de Wasap, desinstálala primero: está firmada
+   con otra clave y Android no deja actualizarla.
+4. Abre Wasap → **Cambiar** → escribe la IP y el puerto → **Guardar servidor**.
+5. Inicia sesión. Las actualizaciones de la alpha se instalan encima sin perder la sesión.
+
+### iPhone (ad-hoc)
+
+La alpha de iPhone solo se instala en dispositivos registrados:
+
+1. Quien publica la alpha ejecuta `npx eas-cli device:create`, que genera un enlace o
+   un QR. Ábrelo en Safari en tu iPhone e instala el perfil que registra tu equipo.
+2. Cuando te avisen de que hay build nueva, abre el enlace de instalación de EAS en
+   Safari y toca **Instalar**. Un iPhone registrado después de ese build necesita uno nuevo.
+3. Al abrir Wasap por primera vez, permite el acceso a la **red local**: sin ese
+   permiso no puede llegar al servidor. Se puede cambiar en Ajustes → Privacidad →
+   Red local.
+4. Configura servidor e inicia sesión como en Android.
+
+### Reportar un problema
+
+En la app, **Ajustes → Diagnóstico** muestra servidor, puerto, estado, vigencia de la
+sesión, operación pendiente y el último aviso con su código. Copia esos datos (el
+texto se puede seleccionar) y envíalos junto con lo que hacías y la hora. No envíes
+tu PIN.
+
+## Publicar la alpha (mantenimiento)
+
+- **APK firmado:** el keystore de alpha vive fuera del repositorio (`~/.wasap/`) y el
+  plugin `plugins/with-release-signing.cjs` lo usa si recibe estas propiedades:
+
+  ```sh
+  export ANDROID_HOME="$HOME/Android/Sdk" WASAP_CA_PEM="$(cat ../certs/ca.crt)"
+  export ORG_GRADLE_PROJECT_wasapReleaseStoreFile="$HOME/.wasap/alpha.keystore"
+  export ORG_GRADLE_PROJECT_wasapReleaseStorePassword="$(cat "$HOME/.wasap/alpha-keystore-password")"
+  export ORG_GRADLE_PROJECT_wasapReleaseKeyAlias=wasap-alpha
+  npx expo prebuild --platform android --no-install
+  (cd android && ./gradlew :app:assembleRelease)
+  ```
+
+  El APK queda en `android/app/build/outputs/apk/release/app-release.apk`. Respalda
+  el keystore y su contraseña: sin ellos, los testers tendrían que desinstalar para
+  recibir actualizaciones.
+- **iPhone ad-hoc:** el proyecto EAS ya existe y el entorno `preview` tiene la CA
+  pública en `WASAP_CA_PEM`. Registra los equipos con `npx eas-cli device:create` y
+  publica con `npx eas-cli build --platform ios --profile preview`; EAS pide iniciar
+  sesión con la cuenta de Apple Developer y crea el perfil ad-hoc con esos equipos.
+- **Icono y splash:** las fuentes vectoriales están en `assets/brand/*.svg`;
+  `assets/brand/build.sh` regenera los PNG.
+
 ## Preparar la CA pública
 
 Requiere Node 22.18 o posterior, npm y el certificado público de la CA que firmó el servidor. El servidor genera `certs/ca.crt` con `scripts/create-certs.sh`.
