@@ -34,6 +34,9 @@ Usa la lista de `harden-server-load-resilience`: `UNAVAILABLE`/`UNAUTHENTICATED`
 - [Asistencia bloqueada detrás de 20 mensajes] → En LAN la cola se vacía en milisegundos; el aviso explica la espera.
 - [Diario grande en AsyncStorage] → 20 × 4000 caracteres ≈ 160 KB como máximo; aceptable.
 
+- [Retirado de un grupo con mensajes en cola] → El mensaje se registra como no enviado, pero la app sale del grupo porque ya no hay acceso, así que no hay hilo donde mostrarlo. Se acepta: el aviso «Ya no tienes acceso» explica la situación.
+- [Aviso repetido en reintentos] → Si la app reenvía un UUID ya confirmado (por ejemplo, tras agotar su espera), el servidor devuelve el resultado guardado y vuelve a emitir `message.created`. Es el mismo mensaje y los clientes deduplican por `id`; se observó en la verificación del 17 de noviembre.
+
 ## Migration Plan
 
 La app migra el formato anterior al arrancar (D1). Sin cambios de servidor. Rollback: una versión anterior no lee `outbox:` y simplemente no ve esos pendientes; se documenta que no se debe volver atrás con mensajes en cola.

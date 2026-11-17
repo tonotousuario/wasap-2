@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {RefreshControl, ScrollView, Text, View} from 'react-native';
 import {engine} from '../native';
-import {clock, customRange, dayLabel, displayDate, explainError, groupByDay, maskDate, momentLabel, type RangePreset} from '../format';
+import {clock, customRange, dayLabel, displayDate, explainError, groupByDay, maskDate, momentLabel, pendingLabel, type RangePreset} from '../format';
 import type {AttendanceEvent} from '../types';
 import {run, useEngine} from '../ui/app';
 import {Button, Chip, Empty, Field, Icon, Notice, SectionTitle, SkeletonRows, Seal, type IconName} from '../ui/kit';
@@ -50,7 +50,7 @@ export function Attendance() {
   const heroFg = confirmedInside ? c.onPrimarySoft : c.text;
   const heroSoft = confirmedInside ? c.onPrimarySoft : c.textSoft;
 
-  const blocked = !state.online ? 'Sin conexión. Podrás registrar cuando vuelva.' : state.pending && !awaitingMark ? 'Hay un envío pendiente de confirmar. Espera a que se resuelva.' : '';
+  const blocked = !state.online ? 'Sin conexión. Podrás registrar cuando vuelva.' : state.pending && !awaitingMark ? `${pendingLabel(state.pendingCount, state.pendingType)}. Podrás registrar en cuanto se resuelva.` : '';
 
   return (
     <ScrollView style={{flex: 1, backgroundColor: c.bg}} contentContainerStyle={{padding: space.lg, paddingBottom: space.xxl, gap: space.lg}} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={false} enabled={state.online && !state.busy} onRefresh={() => run(engine.refresh())} colors={[c.primary]} tintColor={c.primary} />}>

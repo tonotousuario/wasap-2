@@ -63,6 +63,37 @@ cambió desde que se leyó, responde CONFLICT y el cliente recupera el estado
 vigente. TCP garantiza el transporte ordenado de bytes; esta lógica de
 aplicación relaciona la confirmación con el commit y evita duplicar el efecto.
 
+## Cola de salida de mensajes
+
+```mermaid
+sequenceDiagram
+    participant U as Estudiante
+    participant A as App
+    participant Q as Cola en el teléfono
+    participant S as Servidor JVM
+    U->>A: Escribe varios mensajes
+    A->>Q: Guarda cada uno con su UUID (máx. 20)
+    A-->>U: Burbujas «Pendiente», compositor libre
+    loop Uno a uno, en el orden escrito
+        A->>S: messages.send (UUID del primero)
+        alt Confirmado
+            S-->>A: Mensaje con seq
+            A->>Q: Quita el primero
+        else UNAVAILABLE, sin respuesta o sesión vencida
+            S-->>A: Error reintentable
+            A->>A: Detiene la cola intacta; reintenta al reconectar
+        else Error definitivo
+            S-->>A: FORBIDDEN, INTERNAL, VALIDATION…
+            A->>Q: Quita solo ese mensaje
+            A-->>U: «No enviado»: copiar al cuadro o descartar
+        end
+    end
+```
+
+Enviar de uno en uno mantiene el orden: el servidor asigna la secuencia al
+confirmar cada mensaje. Asistencia, privados y grupos no se encolan: solo empiezan
+con la cola vacía.
+
 ## Estado que continúa entre días
 
 ```mermaid

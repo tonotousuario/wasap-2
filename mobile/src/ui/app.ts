@@ -48,7 +48,6 @@ export function forgetLocalData() {
   peers.clear();
   asked.clear();
   drafts.clear();
-  unconfirmedSends.clear();
   peerChanged();
 }
 export function usePeers(conversations: Conversation[], online: boolean) {
@@ -79,5 +78,3 @@ export function usePeers(conversations: Conversation[], online: boolean) {
 
 /** Borradores por conversación: sobreviven a salir del chat y a fallos de envío. */
 export const drafts = new Map<string, string>();
-/** Texto de un envío que salió pero aún no tiene respuesta del servidor. */
-export const unconfirmedSends = new Map<string, string>();

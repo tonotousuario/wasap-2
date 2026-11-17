@@ -1,17 +1,19 @@
 import type {Envelope} from './protocol.ts';
-import {PendingMutation,ProtocolError,isTerminal,mergeMessages,compareSeq,type Storage} from './state.ts';
-import type {Server,Session,Message,AttendanceState,AttendanceEvent,Conversation} from './types.ts';
+import {Outbox,ProtocolError,isTerminal,mergeMessages,compareSeq,type Storage} from './state.ts';
+import type {Server,Session,Message,AttendanceState,AttendanceEvent,Conversation,Operation,FailedMessage} from './types.ts';
 import {ConnectError,errorCode,errorDetail} from './errors.ts';
 import {presetRange,type RangePreset} from './format.ts';
 export type Connection={closed:boolean;request(type:string,payload:Record<string,unknown>,id:string):Promise<any>;close(error?:Error):void};
 export type Dependencies={storage:Storage;secure:Storage;uuid:()=>string;connect:(server:Server,event:(e:Envelope)=>void,close:(e:Error)=>void)=>Promise<Connection>};
 export type AttendanceFilters={from?:string;to?:string};
-export type AppState={server:Server;session:Session|null;online:boolean;busy:boolean;pending:boolean;needsLogin:boolean;error:string;errorCode:string;pendingType:string|null;attendance:AttendanceState|null;events:AttendanceEvent[];attendanceCursor:string|null;attendanceFilters:AttendanceFilters;conversations:Conversation[];messages:Record<string,Message[]>;older:Record<string,string|null>};
+export type AppState={server:Server;session:Session|null;online:boolean;busy:boolean;pending:boolean;pendingCount:number;outbox:Operation[];failed:Record<string,FailedMessage[]>;needsLogin:boolean;error:string;errorCode:string;pendingType:string|null;attendance:AttendanceState|null;events:AttendanceEvent[];attendanceCursor:string|null;attendanceFilters:AttendanceFilters;conversations:Conversation[];messages:Record<string,Message[]>;older:Record<string,string|null>};
 export class Engine {
-  state:AppState={server:{host:'192.168.1.2',port:5050},session:null,online:false,busy:false,pending:false,needsLogin:false,error:'',errorCode:'',pendingType:null,attendance:null,events:[],attendanceCursor:null,attendanceFilters:{},conversations:[],messages:{},older:{}};
+  state:AppState={server:{host:'192.168.1.2',port:5050},session:null,online:false,busy:false,pending:false,pendingCount:0,outbox:[],failed:{},needsLogin:false,error:'',errorCode:'',pendingType:null,attendance:null,events:[],attendanceCursor:null,attendanceFilters:{},conversations:[],messages:{},older:{}};
   private deps:Dependencies;
   private connection:Connection|null=null;
-  private journal:PendingMutation|null=null;
+  private journal:Outbox|null=null;
+  private draining:Promise<void>|null=null;
+  private waiters=new Map<string,{resolve:(value:any)=>void;reject:(error:unknown)=>void}>();
   private listeners=new Set<()=>void>();
   private recovered:Record<string,string>={};
   private generation=0;
@@ -25,7 +27,7 @@ export class Engine {
   snapshot=()=>this.state;
   private update(patch:Partial<AppState>){this.state={...this.state,...patch};this.listeners.forEach(fn=>fn());}
   // Estado del diario para la interfaz: si hay algo sin confirmar y de qué tipo.
-  private async pendingPatch(){const op=await this.journal?.load();return {pending:!!op,pendingType:op?.type??null};}
+  private async pendingPatch(){const ops=await this.journal?.load()??[];return {pending:ops.length>0,pendingCount:ops.length,pendingType:ops[0]?.type??null,outbox:ops};}
   private serverScope(){return JSON.stringify([this.state.server.host.toLowerCase(),this.state.server.port]);}
   private userScope(session:Session){return JSON.stringify([this.state.server.host.toLowerCase(),this.state.server.port,session.user.id]);}
   async initialize(){
@@ -35,7 +37,7 @@ export class Engine {
     if(saved){
       const parsed=JSON.parse(saved);
       if(parsed.server===this.serverScope()){
-        this.journal=new PendingMutation(this.deps.storage,this.userScope(parsed.session));
+        this.journal=new Outbox(this.deps.storage,this.userScope(parsed.session));
         this.update({session:parsed.session,...await this.pendingPatch()});
         try{await this.reconnect();}catch(error){this.report(error);}
       }else await this.deps.secure.removeItem('wasap.session');
@@ -53,8 +55,8 @@ export class Engine {
     this.connection=connection;
   }
   private async activate(session:Session){
-    if(this.state.session&&this.state.session.user.id!==session.user.id){await this.journal?.discard();this.recovered={};this.update({messages:{},conversations:[],events:[],attendance:null,older:{}});}
-    this.journal=new PendingMutation(this.deps.storage,this.userScope(session));
+    if(this.state.session&&this.state.session.user.id!==session.user.id){await this.journal?.discard();this.recovered={};this.update({messages:{},conversations:[],events:[],attendance:null,older:{},failed:{}});}
+    this.journal=new Outbox(this.deps.storage,this.userScope(session));
     await this.deps.secure.setItem('wasap.session',JSON.stringify({server:this.serverScope(),session}));
     this.update({session,needsLogin:false,online:true,error:'',errorCode:'',...await this.pendingPatch()});
     await this.reconcile();
@@ -109,11 +111,19 @@ export class Engine {
   }
   private async reconcile(){
     if(!this.journal)return;
-    try{await this.journal.replay(op=>this.queryOperation(op));}
-    catch(error){
+    try{
+      const [first]=await this.journal.load();
+      if(first&&first.type!=='messages.send')await this.settle(first);
+    }catch(error){
       this.report(error);
       if(!isTerminal(error))throw error;
     }finally{this.update(await this.pendingPatch());}
+    await this.drain();
+  }
+  /** Sends one journaled operation; removes it when confirmed or finally rejected. */
+  private async settle(op:Operation){
+    try{const result=await this.queryOperation(op);await this.journal?.remove(op.id);return result;}
+    catch(error){if(isTerminal(error))await this.journal?.remove(op.id);throw error;}
   }
   private queryOperation(op:{type:string;payload:Record<string,unknown>;id:string}){
     if(!this.state.online||!this.connection||this.connection.closed)return Promise.reject(new Error('Sin conexión'));
@@ -124,13 +134,15 @@ export class Engine {
     return this.mutate('attendance.mark',{expectedLastEventId:this.state.attendance.lastEvent?.id??null});
   }
   async mutate(type:string,payload:Record<string,unknown>):Promise<any>{
+    // Messages go through the queue; awaiting here still means "until the server confirms".
+    if(type==='messages.send')return this.waitFor(await this.enqueueMessage(payload as {conversationId:string;text:string}));
     if(!this.journal||!this.state.session)throw new Error('Inicia sesión');
     if(this.state.busy||this.state.pending)throw new Error('Hay una operación pendiente; reconecta para resolverla');
     this.update({busy:true,error:'',errorCode:''});
-    this.operation=this.journal.run({id:this.deps.uuid(),type,payload},this.state.online,op=>this.queryOperation(op));
+    const journal=this.journal,op={id:this.deps.uuid(),type,payload};
+    this.operation=(async()=>{await journal.enqueue(op,this.state.online);this.update(await this.pendingPatch());return this.settle(op);})();
     try{
       const result=await this.operation;
-      if(result.message)this.addMessages(result.message.conversationId,[result.message]);
       // A read failure cannot turn an acknowledged, committed operation into a
       // failed mutation: the composer would otherwise keep a resendable draft.
       await this.refresh().catch(error=>this.report(error));
@@ -140,6 +152,60 @@ export class Engine {
       if(error instanceof ProtocolError&&['FORBIDDEN','NOT_FOUND'].includes(error.code))await this.refreshConversations();
       this.report(error);throw error;
     }finally{this.operation=null;this.update({busy:false,...await this.pendingPatch()});}
+  }
+  /** Saves a message durably in the outbox and starts sending; resolves once it is queued. */
+  async enqueueMessage(payload:{conversationId:string;text:string}):Promise<string>{
+    if(!this.journal||!this.state.session)throw new Error('Inicia sesión');
+    const op:Operation={id:this.deps.uuid(),type:'messages.send',payload};
+    await this.journal.enqueue(op,this.state.online&&!!this.connection&&!this.connection.closed);
+    this.update(await this.pendingPatch());
+    void this.drain().catch(error=>this.report(error));
+    return op.id;
+  }
+  private waitFor(id:string):Promise<any>{return new Promise((resolve,reject)=>this.waiters.set(id,{resolve,reject}));}
+  private resolveWaiter(id:string,result:any){this.waiters.get(id)?.resolve(result);this.waiters.delete(id);}
+  private rejectWaiters(error:unknown,id?:string){
+    for(const [key,waiter] of this.waiters)if(id===undefined||key===id){waiter.reject(error);this.waiters.delete(key);}
+  }
+  /** Sends queued messages one at a time, in order; a single loop runs at a time. */
+  drain():Promise<void>{
+    if(!this.draining)this.draining=this.drainQueue().finally(()=>{this.draining=null;});
+    return this.draining;
+  }
+  private async drainQueue(){
+    const journal=this.journal;
+    while(journal&&journal===this.journal){
+      const [op]=await journal.load();
+      if(!op||op.type!=='messages.send')return;
+      if(!this.state.online||!this.connection||this.connection.closed){this.rejectWaiters(new Error('Sin conexión; se enviará al reconectar'));return;}
+      let result:any;
+      try{result=await this.queryOperation(op);}
+      catch(error){
+        // Retryable: stop with the whole queue intact, to resume in order with the same UUIDs.
+        if(!isTerminal(error)){this.rejectWaiters(error);this.report(error);return;}
+        await journal.remove(op.id);
+        if(journal===this.journal){this.recordFailure(op,error);this.update(await this.pendingPatch());}
+        this.rejectWaiters(error,op.id);
+        continue;
+      }
+      await journal.remove(op.id);
+      if(journal!==this.journal)return;
+      if(result?.message)this.addMessages(result.message.conversationId,[result.message]);
+      // Publish the shorter queue before resolving, so awaiting callers see it settled.
+      this.update(await this.pendingPatch());
+      this.resolveWaiter(op.id,result);
+    }
+  }
+  private recordFailure(op:Operation,error:unknown){
+    const id=String(op.payload.conversationId);
+    const failure:FailedMessage={id:op.id,text:String(op.payload.text),code:errorCode(error),reason:errorDetail(error)};
+    this.update({failed:{...this.state.failed,[id]:[...(this.state.failed[id]??[]),failure]}});
+  }
+  dismissFailed(conversationId:string,id:string){
+    const rest=(this.state.failed[conversationId]??[]).filter(item=>item.id!==id);
+    const failed={...this.state.failed};
+    if(rest.length)failed[conversationId]=rest;else delete failed[conversationId];
+    this.update({failed});
   }
   async refresh(){await this.refreshAttendance();await this.loadAttendance(false);await this.refreshConversations();}
   private applyAttendance(attendance:AttendanceState){
@@ -249,9 +315,11 @@ export class Engine {
     }else connection?.close();
     this.update({busy:true,online:false});
     if(this.operation)await this.operation.catch(()=>{});
+    if(this.draining)await this.draining.catch(()=>{});
+    this.rejectWaiters(new Error('Sesión cerrada'));
     await this.deps.secure.removeItem('wasap.session');await this.journal?.discard();this.journal=null;this.recovered={};
     ++this.attendanceHistoryGeneration;
-    this.update({session:null,online:false,busy:false,pending:false,pendingType:null,needsLogin:false,error:'',errorCode:'',messages:{},conversations:[],events:[],attendance:null,attendanceCursor:null,attendanceFilters:{},older:{}});
+    this.update({session:null,online:false,busy:false,pending:false,pendingCount:0,outbox:[],failed:{},pendingType:null,needsLogin:false,error:'',errorCode:'',messages:{},conversations:[],events:[],attendance:null,attendanceCursor:null,attendanceFilters:{},older:{}});
   }
   async configure(server:Server){
     const host=server.host.trim().replace(/^\[|\]$/g,'').toLowerCase();

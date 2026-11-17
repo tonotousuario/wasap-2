@@ -59,7 +59,7 @@ test('logout clears token, pending operation, cached messages; new user/server c
   assert.equal(t.engine.state.pending,true);
   await t.engine.logout();
   assert.equal(t.secure.values.size,0);assert.equal(t.engine.state.session,null);assert.deepEqual(t.engine.state.messages,{});
-  assert.equal([...t.storage.values.keys()].some(k=>k.startsWith('pending:')),false);
+  assert.equal([...t.storage.values.keys()].some(k=>k.startsWith('pending:')||k.startsWith('outbox:')),false);
   await t.engine.configure({host:'192.168.1.9',port:5050});
   assert.equal(t.engine.state.server.host,'192.168.1.9');
 });
@@ -77,15 +77,22 @@ test('loads every conversation page before removing caches for revoked membershi
 test('returns committed mutation success even when its follow-up read loses connectivity',async()=>{
   const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
   let committed=false;
+  const event={id:'a1',seq:'1',type:'ENTRY',recordedAt:'2026-11-12T00:00:00Z'};
   const base=t.setHandler(async(type,payload)=>{
-    if(type==='messages.send'){committed=true;return {message:message('2')};}
+    if(type==='attendance.mark'){committed=true;return {event,nextType:'EXIT'};}
     if(committed&&type==='attendance.state')throw new Error('read connection lost');
     return base(type,payload);
   });
-  const result=await t.engine.mutate('messages.send',{conversationId:'r1',text:'2'});
-  assert.equal(result.message.id,'m2');assert.equal(t.engine.state.pending,false);
-  assert.equal(t.engine.state.messages.r1.at(-1)?.id,'m2');
+  const result=await t.engine.markAttendance();
+  assert.equal(result.event.id,'a1');assert.equal(t.engine.state.pending,false);
   assert.match(t.engine.state.error,/read connection lost/);
+});
+test('an awaited message send resolves once confirmed, with the message in its thread and the queue empty',async()=>{
+  const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
+  const base=t.setHandler(async(type,payload)=>type==='messages.send'?{message:message('2')}:base(type,payload));
+  const result=await t.engine.mutate('messages.send',{conversationId:'r1',text:'2'});
+  assert.equal(result.message.id,'m2');assert.equal(t.engine.state.pending,false);assert.equal(t.engine.state.pendingCount,0);
+  assert.equal(t.engine.state.messages.r1.at(-1)?.id,'m2');
 });
 test('a membership change during recovery queues a trailing authoritative refresh',async()=>{
   const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
@@ -148,7 +155,7 @@ test('active socket auth expiry prompts login, deletes token, preserves same-use
   });
   await assert.rejects(t.engine.mutate('messages.send',{conversationId:'r1',text:'2'}),/sesión vencida/);
   assert.equal(t.engine.state.needsLogin,true);assert.equal(t.engine.state.online,false);assert.equal(t.secure.values.size,0);
-  const pending=JSON.parse([...t.storage.values.entries()].find(([key])=>key.startsWith('pending:'))![1]);
+  const [pending]=JSON.parse([...t.storage.values.entries()].find(([key])=>key.startsWith('outbox:'))![1]);
   t.setHandler(async(type,payload)=>type==='messages.send'?{message:message('2')}:base(type,payload));
   await t.engine.login('123','123456');
   const attempts=t.calls.filter(c=>c.type==='messages.send');
@@ -235,4 +242,80 @@ test('failures expose a stable code for the interface and can be dismissed',asyn
   t.disconnect();await assert.rejects(t.engine.query('ping'));
   t.engine.report(await t.engine.query('ping').catch(error=>error));
   assert.equal(t.engine.state.errorCode,'CONNECT_OFFLINE');
+});
+const sent=(id:string,text:string,seq:string,conversationId='r1')=>({message:{...message(seq),id,text,conversationId}});
+test('queued messages are sent one at a time in the order they were written',async()=>{
+  const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
+  let release=()=>{};const gate=new Promise<void>(resolve=>{release=resolve;});let seq=1;let inFlight=0,maxInFlight=0;
+  const base=t.setHandler(async(type,payload)=>{
+    if(type!=='messages.send')return base(type,payload);
+    inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);
+    if(payload.text==='uno')await gate;
+    inFlight--;return sent('m'+payload.text,payload.text,String(++seq));
+  });
+  await t.engine.enqueueMessage({conversationId:'r1',text:'uno'});
+  await t.engine.enqueueMessage({conversationId:'r1',text:'dos'});
+  assert.equal(t.engine.state.pendingCount,2);
+  assert.deepEqual(t.engine.state.outbox.map(op=>op.payload.text),['uno','dos']);
+  release();await t.engine.drain();
+  assert.deepEqual(t.calls.filter(c=>c.type==='messages.send').map(c=>c.payload.text),['uno','dos']);
+  assert.equal(maxInFlight,1,'never two sends at once');
+  assert.equal(t.engine.state.pendingCount,0);
+  assert.deepEqual(t.engine.state.messages.r1.slice(-2).map(m=>m.text),['uno','dos']);
+});
+test('UNAVAILABLE stops the queue without discarding anything; reconnecting resumes with the same UUIDs',async()=>{
+  const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
+  let down=true;let seq=1;
+  const base=t.setHandler(async(type,payload)=>{
+    if(type!=='messages.send')return base(type,payload);
+    if(down)throw new ProtocolError('UNAVAILABLE','base caída');
+    return sent('m'+payload.text,payload.text,String(++seq));
+  });
+  await t.engine.enqueueMessage({conversationId:'r1',text:'uno'});
+  await t.engine.enqueueMessage({conversationId:'r1',text:'dos'});
+  await t.engine.drain();
+  assert.equal(t.engine.state.pendingCount,2);
+  const ids=t.engine.state.outbox.map(op=>op.id);
+  down=false;t.disconnect();await t.engine.reconnect();
+  assert.equal(t.engine.state.pendingCount,0);
+  const attempts=t.calls.filter(c=>c.type==='messages.send');
+  assert.deepEqual(attempts.slice(-2).map(c=>c.id),ids,'same UUIDs, same order');
+});
+test('a FORBIDDEN message is marked unsent and the queue continues with other conversations',async()=>{
+  const t=setup();await t.engine.initialize();
+  const base=t.setHandler(async(type,payload)=>{
+    if(type==='conversations.list')return {conversations:[room,{...room,id:'r2',kind:'GROUP',name:'Grupo'}],nextCursor:null};
+    if(type==='messages.list')return {messages:[],nextCursor:null};
+    if(type==='messages.send'&&payload.conversationId==='r2')throw new ProtocolError('FORBIDDEN','ya no perteneces');
+    if(type==='messages.send')return sent('ok','general','5');
+    return base(type,payload);
+  });
+  await t.engine.login('123','123456');
+  await t.engine.enqueueMessage({conversationId:'r2',text:'al grupo'});
+  await t.engine.enqueueMessage({conversationId:'r1',text:'general'});
+  await t.engine.drain();
+  assert.equal(t.engine.state.pendingCount,0);
+  assert.deepEqual(t.engine.state.failed.r2?.map(f=>[f.text,f.code]),[['al grupo','FORBIDDEN']]);
+  assert.equal(t.engine.state.messages.r1.at(-1)?.text,'general');
+  t.engine.dismissFailed('r2',t.engine.state.failed.r2![0].id);
+  assert.equal(t.engine.state.failed.r2,undefined);
+});
+test('a restarted app resumes its queue in order with the original UUIDs',async()=>{
+  const t=setup();await t.engine.initialize();await t.engine.login('123','123456');
+  const base=t.setHandler(async(type,payload)=>type==='messages.send'?Promise.reject(new Error('lost')):base(type,payload));
+  await t.engine.enqueueMessage({conversationId:'r1',text:'uno'});
+  await t.engine.enqueueMessage({conversationId:'r1',text:'dos'});
+  await t.engine.drain();
+  const ids=t.engine.state.outbox.map(op=>op.id);
+  assert.equal(ids.length,2);
+  // A second engine over the same storage simulates restarting the app.
+  const calls:{type:string;id:string;payload:any}[]=[];let seq=1;
+  const restarted=new Engine({storage:t.storage,secure:t.secure,uuid:()=>'new-'+Math.random(),connect:async()=>({closed:false,close(){},request:async(type:string,payload:any,id:string)=>{
+    calls.push({type,id,payload});
+    if(type==='messages.send')return sent('m'+payload.text,payload.text,String(++seq));
+    return base(type,payload);
+  }})});
+  await restarted.initialize();
+  assert.deepEqual(calls.filter(c=>c.type==='messages.send').map(c=>c.id),ids);
+  assert.equal(restarted.state.pendingCount,0);
 });

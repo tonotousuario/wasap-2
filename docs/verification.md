@@ -25,12 +25,32 @@ historial. Una revisión visual independiente consideró Dentro/Fuera resueltos.
 Los chips son legibles y la selección es visible; no se verificó la interacción
 del selector de fechas en esa pasada. No existe un veredicto global de «ship».
 
+## Cola de salida de mensajes (17 de noviembre de 2026)
+
+Con el servidor local en pausa se escribieron cuatro mensajes seguidos en el chat
+General desde `emulator-5554` (cuenta DEMO001). Para provocar un rechazo definitivo
+se añadió temporalmente a la base local una restricción que rechaza el texto exacto
+«Este falla» (el servidor responde `INTERNAL`); se eliminó al terminar.
+
+| En cola, servidor en pausa | Tras reanudar: enviados en orden y uno no enviado |
+| --- | --- |
+| <img src="images/android-outbox-queued.png" alt="WASAP Android: cuatro mensajes pendientes en orden con el compositor libre" width="300"> | <img src="images/android-outbox-failed.png" alt="WASAP Android: tres mensajes confirmados y uno marcado No enviado con acciones Copiar al cuadro y Descartar" width="300"> |
+
+- Los cuatro quedaron «Pendiente» en el orden escrito y el compositor siguió libre.
+- Al reanudar, la base guardó una sola fila de «Cola 1», «Cola 2» y «Cola 3» con
+  secuencias consecutivas (6, 7, 8); «Este falla» no se guardó y la cola siguió.
+- Una segunda cuenta (QA003) conectada en paralelo recibió los tres en orden. El
+  evento de «Cola 1» llegó dos veces porque la app reenvió el mismo UUID tras
+  agotar su espera y el servidor repite el aviso de un reintento confirmado; es el
+  mismo mensaje (mismo `id`) y los clientes lo deduplican.
+- «Copiar al cuadro» devolvió el texto al compositor y quitó el aviso.
+
 ## Comprobaciones realizadas
 
 | Área | Evidencia | Alcance |
 | --- | --- | --- |
-| Móvil | 40 pruebas y TypeScript aprobados en la última ejecución de implementación | Protocolo, recuperación, diario, filtros, calendario y presentación |
-| Servidor | 3 pruebas unitarias y 13 de integración aprobadas | PostgreSQL desechable, TLS, permisos, reintentos, paginación y fechas |
+| Móvil | 49 pruebas y TypeScript aprobados (17 de noviembre de 2026) | Protocolo, recuperación, cola de salida, directorio, filtros, calendario y presentación |
+| Servidor | 41 pruebas (unitarias y de integración) aprobadas (17 de noviembre de 2026) | PostgreSQL desechable, TLS, permisos, reintentos, sesiones persistentes, clientes lentos, paginación y fechas |
 | Compose local | Imagen construida, servidor iniciado y healthcheck aprobado | Conexión TLS y base disponibles |
 | Configuración Expo | `expo config --type public` válido | CA, plugins, permisos e identificadores |
 | Impeccable Doctor | Sin findings para `mobile/src/App.tsx` | Configuración de la herramienta; no equivale a revisión visual |

@@ -101,8 +101,11 @@ sus integrantes; al retirar a alguien pierde acceso a futuras consultas y entreg
 Los grupos admiten hasta 100 miembros. Los mensajes son de texto, hasta 4000 caracteres.
 
 La app recupera historial al volver del segundo plano y tras reconectar. No crea
-nuevas operaciones sin conexión. Conserva las operaciones ya enviadas que aún no
-tengan confirmación y las reconcilia con el mismo identificador. Cambiar de servidor
+nuevas operaciones sin conexión. Puedes escribir varios mensajes seguidos: quedan
+guardados en el teléfono (hasta 20) y se envían en orden; si el servidor rechaza uno
+de forma definitiva, se marca como no enviado y puedes copiarlo o descartarlo.
+Conserva las operaciones ya enviadas que aún no tengan confirmación y las reconcilia
+con el mismo identificador. Cambiar de servidor
 o cerrar sesión no traslada pendientes a otra identidad. Las sesiones caducan a las
 24 horas y sobreviven a los reinicios del servidor. No hay notificaciones push ni panel web en v1.
 

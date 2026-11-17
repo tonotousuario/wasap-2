@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {classifyConnectFailure, ConnectError, errorCode} from '../src/errors.ts';
 import {ProtocolError} from '../src/state.ts';
-import {canSearchDirectory, clock, conversationTitle, customRange, dayLabel, explainError, groupByDay, isoDate, linkState, maskDate, parseDisplayDate, presetRange, previewText, sortConversations} from '../src/format.ts';
+import {canSearchDirectory, clock, pendingLabel, conversationTitle, customRange, dayLabel, explainError, groupByDay, isoDate, linkState, maskDate, parseDisplayDate, presetRange, previewText, sortConversations} from '../src/format.ts';
 import type {Conversation, Message} from '../src/types.ts';
 
 const now = new Date(2026, 10, 13, 9, 30);
@@ -106,4 +106,11 @@ test('directory search needs at least three characters after trimming',()=>{
   assert.equal(canSearchDirectory('😀😀'),false); // two characters, four UTF-16 units
   assert.equal(canSearchDirectory(' ana '),true);
   assert.equal(canSearchDirectory('A01'),true);
+});
+
+test('pending summary counts queued messages and names other operations',()=>{
+  assert.equal(pendingLabel(0,null),'');
+  assert.equal(pendingLabel(1,'messages.send'),'1 mensaje esperando confirmación');
+  assert.equal(pendingLabel(3,'messages.send'),'3 mensajes esperando confirmación');
+  assert.equal(pendingLabel(1,'attendance.mark'),'Una operación esperando confirmación');
 });

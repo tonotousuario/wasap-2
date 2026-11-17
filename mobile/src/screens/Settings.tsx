@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {Alert, Pressable, ScrollView, Text, View} from 'react-native';
 import {engine} from '../native';
-import {explainError, LINK_LABEL, linkState, momentLabel} from '../format';
+import {explainError, LINK_LABEL, linkState, momentLabel, pendingLabel} from '../format';
 import {run, useEngine, useNav} from '../ui/app';
 import {Avatar, Button, Icon, SectionTitle} from '../ui/kit';
 import {android, radius, space, type, useTheme} from '../ui/theme';
@@ -32,14 +32,14 @@ export function Settings() {
   const link = linkState(state);
   const now = new Date();
   const logout = () =>
-    Alert.alert('¿Cerrar sesión?', state.pending ? 'Hay una operación sin confirmar. Si sales ahora se descarta y no sabrás desde aquí si el servidor la registró.' : 'Tendrás que escribir tu matrícula y tu PIN para volver a entrar.', [{text: 'Cancelar', style: 'cancel'}, {text: 'Cerrar sesión', style: 'destructive', onPress: () => run(engine.logout())}]);
+    Alert.alert('¿Cerrar sesión?', state.pending ? (state.pendingType === 'messages.send' && state.pendingCount > 1 ? `Hay ${state.pendingCount} mensajes sin confirmar. Si sales ahora se descartan y no sabrás desde aquí si el servidor los registró.` : 'Hay una operación sin confirmar. Si sales ahora se descarta y no sabrás desde aquí si el servidor la registró.') : 'Tendrás que escribir tu matrícula y tu PIN para volver a entrar.', [{text: 'Cancelar', style: 'cancel'}, {text: 'Cerrar sesión', style: 'destructive', onPress: () => run(engine.logout())}]);
   const facts: [string, string][] = [
     ['Servidor', state.server.host],
     ['Puerto', String(state.server.port)],
     ['Cifrado', 'TLS con el certificado de instalación'],
     ['Estado', LINK_LABEL[link]],
     ['Sesión válida hasta', momentLabel(session.expiresAt, now)],
-    ['Operación pendiente', state.pending ? OPERATIONS[state.pendingType ?? ''] ?? 'Sí' : 'Ninguna'],
+    ['Operación pendiente', state.pending ? `${OPERATIONS[state.pendingType ?? ''] ?? 'Sí'}${state.pendingCount > 1 ? ` (${state.pendingCount})` : ''}` : 'Ninguna'],
     ['Último aviso', state.error ? `${state.errorCode || 'sin código'}: ${state.error}` : 'Ninguno'],
   ];
   const group = {backgroundColor: c.surface, borderRadius: radius.block, borderWidth: android ? 0 : 1, borderColor: c.line, overflow: 'hidden'} as const;
@@ -61,7 +61,7 @@ export function Settings() {
             <View style={{flex: 1}}>
               <Text style={[type.body, {color: c.text, fontWeight: '600'}]}>{LINK_LABEL[link]}</Text>
               <Text style={[type.small, {color: c.textSoft}]}>{LINK_HELP[link]}</Text>
-              {state.pending && <Text style={[type.small, {color: c.onWarnSoft, backgroundColor: c.warnSoft, marginTop: space.sm, padding: space.sm, borderRadius: 8, overflow: 'hidden'}]}>{OPERATIONS[state.pendingType ?? ''] ?? 'Una operación'}: enviado, pendiente de confirmación.</Text>}
+              {state.pending && <Text style={[type.small, {color: c.onWarnSoft, backgroundColor: c.warnSoft, marginTop: space.sm, padding: space.sm, borderRadius: 8, overflow: 'hidden'}]}>{state.pendingType === 'messages.send' ? pendingLabel(state.pendingCount, state.pendingType) : `${OPERATIONS[state.pendingType ?? ''] ?? 'Una operación'}: enviado, pendiente de confirmación`}.</Text>}
             </View>
           </View>
           <View style={{height: 1, backgroundColor: c.line, marginLeft: space.lg}} />

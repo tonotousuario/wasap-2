@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PendingMutation, mergeMessages, ProtocolError } from '../src/state.ts';
+import { Outbox, OUTBOX_LIMIT, isTerminal, mergeMessages, ProtocolError } from '../src/state.ts';
 import type { Message } from '../src/types.ts';
 
 class Memory {
@@ -9,53 +9,56 @@ class Memory {
   async setItem(key:string,value:string){this.values.set(key,value);}
   async removeItem(key:string){this.values.delete(key);}
 }
-test('saves before sending and replays identical UUID/content after a lost acknowledgement/restart',async()=>{
-  const disk=new Memory();
-  const operation={id:'operation-1',type:'messages.send',payload:{conversationId:'room',text:'hola'}};
-  const first=new PendingMutation(disk,'server/user');
-  await assert.rejects(first.run(operation,true,async op=>{
-    assert.deepEqual(JSON.parse([...disk.values.values()][0]),operation);
-    throw new Error('connection lost');
-  }));
-  const restarted=new PendingMutation(disk,'server/user');
-  let replayed:unknown;
-  const result=await restarted.replay(async op=>{replayed=op;return {message:{id:'saved'}};});
-  assert.deepEqual(replayed,operation);
-  assert.deepEqual(result,{message:{id:'saved'}});
-  assert.equal(await restarted.load(),null);
-});
-test('prevents new offline actions and a second action while a previous result is unresolved',async()=>{
-  const disk=new Memory();const journal=new PendingMutation(disk,'a/user');
-  const op={id:'1',type:'attendance.mark',payload:{expectedLastEventId:null}};
-  await assert.rejects(journal.run(op,false,async()=>({})),/conexión/i);
+const send=(id:string,conversationId='room')=>({id,type:'messages.send',payload:{conversationId,text:id}});
+test('queues messages durably in order and removes them by id',async()=>{
+  const disk=new Memory();const outbox=new Outbox(disk,'server/user');
+  await outbox.enqueue(send('1'),true);await outbox.enqueue(send('2'),true);
+  const restarted=new Outbox(disk,'server/user');
+  assert.deepEqual((await restarted.load()).map(op=>op.id),['1','2']);
+  await restarted.remove('1');
+  assert.deepEqual((await restarted.load()).map(op=>op.id),['2']);
+  await restarted.remove('2');
   assert.equal(disk.values.size,0);
-  await assert.rejects(journal.run(op,true,async()=>{throw new Error('lost');}));
-  await assert.rejects(journal.run({...op,id:'2'},true,async()=>({})),/pendiente/i);
 });
-test('scope prevents replay into another server/user and discard removes prior action',async()=>{
-  const disk=new Memory();const journal=new PendingMutation(disk,'a/one');
-  await assert.rejects(journal.run({id:'1',type:'groups.add',payload:{}},true,async()=>{throw new Error('lost');}));
-  assert.equal(await new PendingMutation(disk,'a/two').replay(async()=>{throw new Error('cross user');}),null);
-  assert.equal(await new PendingMutation(disk,'b/one').load(),null);
-  await journal.discard();assert.equal(await journal.load(),null);
+test('rejects offline actions, a full queue and mixing other mutations with messages',async()=>{
+  const disk=new Memory();const outbox=new Outbox(disk,'a/user');
+  await assert.rejects(outbox.enqueue(send('x'),false),/conexión/i);
+  assert.equal(disk.values.size,0);
+  for(let i=0;i<OUTBOX_LIMIT;i++)await outbox.enqueue(send(String(i)),true);
+  await assert.rejects(outbox.enqueue(send('extra'),true),/20 mensajes/);
+  await assert.rejects(outbox.enqueue({id:'a',type:'attendance.mark',payload:{expectedLastEventId:null}},true),/pendiente/i);
+  const other=new Outbox(new Memory(),'a/user');
+  await other.enqueue({id:'g',type:'groups.add',payload:{}},true);
+  await assert.rejects(other.enqueue(send('m'),true),/pendiente/i);
+  await assert.rejects(other.enqueue({id:'g2',type:'groups.add',payload:{}},true),/pendiente/i);
 });
-test('terminal conflict clears pending; unavailable keeps pending for retry',async()=>{
-  const disk=new Memory();const journal=new PendingMutation(disk,'a/user');
-  const op={id:'1',type:'attendance.mark',payload:{expectedLastEventId:null}};
-  await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('CONFLICT','stale');}),/stale/);
-  assert.equal(await journal.load(),null);
-  await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('UNAVAILABLE','later');}));
-  assert.deepEqual(await journal.load(),op);
+test('concurrent enqueues keep every message',async()=>{
+  const outbox=new Outbox(new Memory(),'a/user');
+  await Promise.all(['1','2','3','4'].map(id=>outbox.enqueue(send(id),true)));
+  assert.deepEqual((await outbox.load()).map(op=>op.id),['1','2','3','4']);
 });
-test('INTERNAL is final and clears pending; UNAUTHENTICATED keeps it for the same user',async()=>{
-  const disk=new Memory();const journal=new PendingMutation(disk,'a/user');
-  const op={id:'1',type:'messages.send',payload:{conversationId:'room',text:'hola'}};
-  await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('INTERNAL','boom');}),/boom/);
-  assert.equal(await journal.load(),null);
-  await assert.rejects(journal.run(op,true,async()=>{throw new ProtocolError('UNAUTHENTICATED','login');}));
-  assert.deepEqual(await journal.load(),op);
-  await assert.rejects(journal.replay(async()=>{throw new ProtocolError('INTERNAL','boom');}));
-  assert.equal(await journal.load(),null);
+test('scope prevents replay into another server/user and discard removes everything',async()=>{
+  const disk=new Memory();const outbox=new Outbox(disk,'a/one');
+  await outbox.enqueue(send('1'),true);
+  assert.deepEqual(await new Outbox(disk,'a/two').load(),[]);
+  assert.deepEqual(await new Outbox(disk,'b/one').load(),[]);
+  await outbox.discard();assert.deepEqual(await outbox.load(),[]);assert.equal(disk.values.size,0);
+});
+test('migrates a legacy single pending operation keeping its UUID',async()=>{
+  const disk=new Memory();
+  const legacy={id:'legacy-uuid',type:'messages.send',payload:{conversationId:'room',text:'hola'}};
+  await disk.setItem('pending:a/user',JSON.stringify(legacy));
+  const outbox=new Outbox(disk,'a/user');
+  assert.deepEqual(await outbox.load(),[legacy]);
+  assert.equal(await disk.getItem('pending:a/user'),null);
+  await outbox.enqueue(send('next'),true);
+  assert.deepEqual((await outbox.load()).map(op=>op.id),['legacy-uuid','next']);
+});
+test('only UNAVAILABLE and UNAUTHENTICATED keep an operation; INTERNAL and others are final',()=>{
+  assert.equal(isTerminal(new ProtocolError('UNAVAILABLE','later')),false);
+  assert.equal(isTerminal(new ProtocolError('UNAUTHENTICATED','login')),false);
+  assert.equal(isTerminal(new Error('connection lost')),false);
+  for(const code of ['INTERNAL','CONFLICT','FORBIDDEN','NOT_FOUND','VALIDATION'])assert.equal(isTerminal(new ProtocolError(code,'x')),true,code);
 });
 test('orders arbitrary precision sequences, deduplicates records and ignores other rooms',()=>{
   const message=(id:string,seq:string,conversationId='room'):Message=>({id,seq,conversationId,senderId:'u',senderName:'Ana',text:id,createdAt:'2026-11-12T00:00:00Z'});

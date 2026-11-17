@@ -108,6 +108,14 @@ Clients durably save pending mutations BEFORE writing them and reuse their UUID
 after lost acknowledgements/restarts, until reconciled. Do not create new actions
 offline. Never carry a pending action to a different authenticated user/server.
 
+The reference mobile client keeps an ordered outbox: up to 20 `messages.send`
+requests may wait, and they are sent one at a time in the order they were written
+(never in parallel, so the server's per-conversation `seq` follows that order). A
+retryable error (UNAVAILABLE, UNAUTHENTICATED, no answer) stops the queue intact;
+a final error removes only that message, which is shown as not sent and never
+resent automatically. Every other mutation is exclusive: it starts only with an
+empty outbox and no message is queued behind it.
+
 Attendance locks the user row, checks expectedLastEventId, and appends the inverse
 of the last type (first ENTRY). A stale expectation errors CONFLICT. There is no
 midnight reset. Server/database time is authoritative. All writes acknowledge only

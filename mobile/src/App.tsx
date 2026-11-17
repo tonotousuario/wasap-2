@@ -2,7 +2,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {ActivityIndicator, AppState as NativeAppState, BackHandler, KeyboardAvoidingView, PanResponder, Pressable, StatusBar, Text, View} from 'react-native';
 import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {engine} from './native';
-import {explainError, LINK_LABEL, linkState} from './format';
+import {explainError, LINK_LABEL, linkState, pendingLabel} from './format';
 import {Login, ServerScreen} from './screens/Access';
 import {Attendance} from './screens/Attendance';
 import {Chats, NewChat, NewGroup} from './screens/Chats';
@@ -134,7 +134,7 @@ function Tabs({tab, setTab, notice, clearNotice}: {tab: Tab; setTab: (tab: Tab) 
         </View>
       )}
       {failure && <Notice tone="error" title={failure.title} body={failure.body} onClose={() => engine.clearError()} style={{margin: space.md, marginBottom: 0}} />}
-      {state.pending && tab !== 'attendance' && <Notice tone="warn" title="Enviado, pendiente de confirmación" body="Una operación espera respuesta del servidor. No podrás crear otra hasta que se resuelva." action="Comprobar ahora" busy={state.busy} onAction={() => run(engine.reconnect())} style={{margin: space.md, marginBottom: 0}} />}
+      {state.pending && tab !== 'attendance' && <Notice tone="warn" title="Enviado, pendiente de confirmación" body={state.pendingType === 'messages.send' ? `${pendingLabel(state.pendingCount, state.pendingType)}. Se envían en orden y sin duplicarse; otras acciones esperarán.` : 'Una operación espera respuesta del servidor. No podrás crear otra hasta que se resuelva.'} action="Comprobar ahora" busy={state.busy} onAction={() => run(engine.reconnect())} style={{margin: space.md, marginBottom: 0}} />}
       <View style={{flex: 1}}>
         {tab === 'attendance' ? <Attendance /> : tab === 'chats' ? <Chats notice={notice} clearNotice={clearNotice} /> : <Settings />}
       </View>

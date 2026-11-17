@@ -3,8 +3,9 @@ import {ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Text, TextInp
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {engine} from '../native';
 import {canSearchDirectory, clock, conversationTitle, dayKey, dayLabel, DIRECTORY_HINT, explainError, kindLabel} from '../format';
-import type {Message, User} from '../types';
-import {drafts, unconfirmedSends, useDebounced, useEngine, useKeyboardVisible, useNav, usePeers} from '../ui/app';
+import type {FailedMessage, Message, User} from '../types';
+import {OUTBOX_LIMIT} from '../state';
+import {drafts, useDebounced, useEngine, useKeyboardVisible, useNav, usePeers} from '../ui/app';
 import {Avatar, Button, Empty, Field, Icon, IconButton, Notice, PersonRow, SectionTitle, SkeletonRows, TopBar} from '../ui/kit';
 import {radius, space, type, useTheme} from '../ui/theme';
 
@@ -33,32 +34,11 @@ export function Thread({id}: {id: string}) {
   const [text, setText] = useState(drafts.get(id) ?? '');
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState('');
-  const [unconfirmed, setUnconfirmedState] = useState<string | null>(unconfirmedSends.get(id) ?? null);
-  const setUnconfirmed = (value: string | null) => {
-    if (value === null) unconfirmedSends.delete(id); else unconfirmedSends.set(id, value);
-    setUnconfirmedState(value);
-  };
   const [loadingOlder, setLoadingOlder] = useState(false);
   const change = (value: string) => {
     setText(value);
     if (value) drafts.set(id, value); else drafts.delete(id);
   };
-
-  // Un envío sin respuesta se muestra como burbuja con reloj. Al resolverse:
-  // si el servidor lo guardó, llega como mensaje normal con palomita; si no,
-  // el texto vuelve al compositor para que nada se pierda.
-  // Se decide solo con la conexión al día (sin pendiente ni sincronización en
-  // curso), para no dar por perdido un mensaje que aún se está descargando.
-  useEffect(() => {
-    if (unconfirmed === null || state.pending || state.busy || !state.online) return;
-    const saved = messages.some(message => message.senderId === ownId && message.text === unconfirmed);
-    if (!saved) {
-      // Nunca se descarta: vuelve al compositor, delante de lo que se haya escrito después.
-      change(text.trim() ? `${unconfirmed}\n${text}` : unconfirmed);
-      setFailure('No pudimos confirmar tu último mensaje. Revisa la conversación antes de reenviarlo.');
-    }
-    setUnconfirmed(null);
-  }, [state.pending, state.busy, state.online, unconfirmed, messages]);
 
   const rows = useMemo(() => {
     const list: Row[] = messages.map((message, index) => {
@@ -73,24 +53,32 @@ export function Thread({id}: {id: string}) {
 
   const trimmed = text.trim();
   const tooLong = text.length > LIMIT;
-  const awaiting = state.pending;
-  const blocked = !state.online ? 'Sin conexión. Tu borrador se conserva y podrás enviarlo al reconectar.' : awaiting ? (state.pendingType === 'messages.send' ? 'Podrás enviar otro mensaje en cuanto se confirme el anterior.' : 'Hay una operación pendiente de confirmar. Podrás enviar en cuanto se resuelva.') : '';
-  const canSend = !!trimmed && !tooLong && state.online && !state.busy && !awaiting && !sending;
+  // Los mensajes se encolan (hasta OUTBOX_LIMIT) y se envían en orden; otra operación pendiente
+  // (asistencia, grupos, privados) sí bloquea el envío hasta resolverse.
+  const queued = state.outbox.filter(op => op.type === 'messages.send' && op.payload.conversationId === id);
+  const failedHere = state.failed[id] ?? [];
+  const otherPending = state.pending && state.pendingType !== 'messages.send';
+  const full = !otherPending && state.pendingCount >= OUTBOX_LIMIT;
+  const blocked = !state.online ? 'Sin conexión. Tu borrador se conserva y podrás enviarlo al reconectar.' : otherPending ? 'Hay una operación pendiente de confirmar. Podrás enviar en cuanto se resuelva.' : full ? `Hay ${OUTBOX_LIMIT} mensajes esperando confirmación. Podrás enviar más en cuanto el servidor responda.` : '';
+  const canSend = !!trimmed && !tooLong && state.online && !otherPending && !full && !sending;
   const send = async () => {
     if (!canSend) return;
     setSending(true);
     setFailure('');
     try {
-      await engine.mutate('messages.send', {conversationId: id, text: trimmed});
+      // Queda guardado en el teléfono antes de enviarse: el cuadro se libera para seguir escribiendo.
+      await engine.enqueueMessage({conversationId: id, text: trimmed});
       change('');
-    } catch {
-      // El borrador se queda: nada se pierde por un fallo de envío.
-      if (engine.state.pending) {setUnconfirmed(trimmed); change('');}
-      else setFailure(explainError(engine.state.errorCode, engine.state.error).body);
-      engine.clearError();
+    } catch (error) {
+      // El borrador se queda: nada se pierde si no se pudo encolar.
+      setFailure(error instanceof Error ? error.message : String(error));
     } finally {
       setSending(false);
     }
+  };
+  const recover = (failed: FailedMessage) => {
+    change(text.trim() ? `${failed.text}\n${text}` : failed.text);
+    engine.dismissFailed(id, failed.id);
   };
   const older = state.older[id];
   const loadOlder = async () => {
@@ -124,13 +112,10 @@ export function Thread({id}: {id: string}) {
         onEndReachedThreshold={0.4}
         contentContainerStyle={{paddingHorizontal: space.md, paddingVertical: space.md, flexGrow: 1}}
         ListHeaderComponent={
-          unconfirmed !== null && state.pending ? (
-            <View accessible accessibilityLabel={`Tú, pendiente de confirmación: ${unconfirmed}`} style={{maxWidth: '84%', alignSelf: 'flex-end', marginTop: space.sm, paddingHorizontal: space.md, paddingTop: 7, paddingBottom: 6, borderRadius: radius.bubble, backgroundColor: c.bubbleOwn, borderWidth: 1, borderStyle: 'dashed', borderColor: c.outline}}>
-              <Text style={[type.body, {color: c.text}]}>{unconfirmed}</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4}}>
-                <Icon name="pending" size={14} color={c.onBubbleSoft} />
-                <Text style={{fontSize: 12, lineHeight: 16, color: c.onBubbleSoft}}>Pendiente de confirmación</Text>
-              </View>
+          failedHere.length || queued.length ? (
+            <View style={{gap: space.xs, paddingTop: space.sm}}>
+              {failedHere.map(failed => <FailedBubble key={failed.id} failed={failed} onRecover={() => recover(failed)} onDismiss={() => engine.dismissFailed(id, failed.id)} />)}
+              {queued.map(op => <QueuedBubble key={op.id} text={String(op.payload.text)} />)}
             </View>
           ) : undefined
         }
@@ -149,7 +134,7 @@ export function Thread({id}: {id: string}) {
         renderItem={({item}) => <Bubble row={item} showName={showNames} now={now} />}
       />
       <View style={{backgroundColor: c.surface, borderTopWidth: 1, borderColor: c.line, paddingHorizontal: space.sm, paddingTop: space.sm, paddingBottom: keyboard ? space.sm : Math.max(insets.bottom, space.sm), gap: space.sm}}>
-        {!!failure && <Notice tone="error" title="No se envió" body={`${failure} Tu texto está en el cuadro de mensaje.`} onClose={() => setFailure('')} />}
+        {!!failure && <Notice tone="error" title="No se envió" body={`${failure}. Tu texto está en el cuadro de mensaje.`} onClose={() => setFailure('')} />}
         {!!blocked && (
           <View accessibilityLiveRegion="polite" style={{flexDirection: 'row', gap: space.sm, alignItems: 'center', paddingHorizontal: space.sm}}>
             <Icon name={state.online ? 'pending' : 'offline'} size={18} color={c.textSoft} />
@@ -175,6 +160,41 @@ export function Thread({id}: {id: string}) {
           </Pressable>
         </View>
         {text.length > LIMIT - 400 && <Text accessibilityLiveRegion="polite" style={[type.caption, {color: tooLong ? c.danger : c.textSoft, textAlign: 'right', paddingRight: 60}]}>{tooLong ? `Sobran ${text.length - LIMIT} caracteres` : `${text.length} de ${LIMIT}`}</Text>}
+      </View>
+    </View>
+  );
+}
+
+/** Mensaje propio guardado en el teléfono que aún espera la confirmación del servidor. */
+function QueuedBubble({text}: {text: string}) {
+  const {c} = useTheme();
+  return (
+    <View accessible accessibilityLabel={`Tú, pendiente de confirmación: ${text}`} style={{maxWidth: '84%', alignSelf: 'flex-end', paddingHorizontal: space.md, paddingTop: 7, paddingBottom: 6, borderRadius: radius.bubble, backgroundColor: c.bubbleOwn, borderWidth: 1, borderStyle: 'dashed', borderColor: c.outline}}>
+      <Text style={[type.body, {color: c.text}]}>{text}</Text>
+      <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4}}>
+        <Icon name="pending" size={14} color={c.onBubbleSoft} />
+        <Text style={{fontSize: 12, lineHeight: 16, color: c.onBubbleSoft}}>Pendiente</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Mensaje que el servidor rechazó de forma definitiva: nunca se reenvía solo. */
+function FailedBubble({failed, onRecover, onDismiss}: {failed: FailedMessage; onRecover: () => void; onDismiss: () => void}) {
+  const {c} = useTheme();
+  const reason = explainError(failed.code, failed.reason).title;
+  return (
+    <View style={{maxWidth: '84%', alignSelf: 'flex-end', gap: space.xs}}>
+      <View accessible accessibilityLabel={`Tú, no enviado: ${failed.text}. ${reason}`} style={{paddingHorizontal: space.md, paddingTop: 7, paddingBottom: 6, borderRadius: radius.bubble, backgroundColor: c.surface, borderWidth: 1.5, borderColor: c.danger}}>
+        <Text style={[type.body, {color: c.text}]}>{failed.text}</Text>
+        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4}}>
+          <Icon name="alert" size={14} color={c.danger} />
+          <Text style={{fontSize: 12, lineHeight: 16, color: c.danger, fontWeight: '600'}}>No enviado · {reason}</Text>
+        </View>
+      </View>
+      <View style={{flexDirection: 'row', justifyContent: 'flex-end', gap: space.xs}}>
+        <Button variant="text" label="Copiar al cuadro" onPress={onRecover} />
+        <Button variant="text" label="Descartar" onPress={onDismiss} />
       </View>
     </View>
   );

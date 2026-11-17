@@ -183,3 +183,9 @@ export const DIRECTORY_HINT = 'Escribe al menos 3 letras o números';
 export function canSearchDirectory(text: string) {
   return [...text.trim()].length >= DIRECTORY_MIN;
 }
+/** Resumen de lo que espera confirmación: «3 mensajes esperando confirmación». */
+export function pendingLabel(count: number, type: string | null) {
+  if (!count) return '';
+  if (type === 'messages.send') return count === 1 ? '1 mensaje esperando confirmación' : `${count} mensajes esperando confirmación`;
+  return 'Una operación esperando confirmación';
+}
