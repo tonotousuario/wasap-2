@@ -39,7 +39,15 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
     }
     fun resetPin(matricula: String, pin: String) {
         val hash = Pins.hash(pin)
-        db.transaction { c -> if (c.exec("UPDATE users SET pin_hash=?,credential_version=credential_version+1 WHERE matricula=?", hash, this.matricula(matricula)) == 0) throw ApiError("NOT_FOUND", "Matrícula no encontrada") }
+        db.transaction { c ->
+            val id = c.rows("UPDATE users SET pin_hash=?,credential_version=credential_version+1 WHERE matricula=? RETURNING id::text", hash, this.matricula(matricula)).firstOrNull()
+                ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
+            c.exec("DELETE FROM sessions WHERE user_id=?::uuid", id.string("id"))
+        }
+    }
+    /** Ends every session of the user (lost phone); returns how many were closed. */
+    fun logoutUser(matricula: String): Int = db.transaction { c ->
+        c.exec("DELETE FROM sessions WHERE user_id=?::uuid", user(c, matricula).string("id"))
     }
     // Use an independently salted dummy hash to perform comparable work for unknown accounts.
     private val dummyHash by lazy { Pins.hash("000000") }
@@ -48,10 +56,6 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         val valid = Pins.verify(pin, row?.string("pin_hash") ?: dummyHash)
         if (row == null || !valid) throw ApiError("INVALID_CREDENTIALS", "Matrícula o PIN incorrectos")
         return row.toUser().also { it.credentialVersion = row["credential_version"]!!.jsonPrimitive.int }
-    }
-    fun credentialVersion(userId: String): Int = db.transaction { c ->
-        c.rows("SELECT credential_version FROM users WHERE id=?::uuid", userId).firstOrNull()?.get("credential_version")?.jsonPrimitive?.int
-            ?: throw ApiError("UNAUTHENTICATED", "Usuario no encontrado")
     }
 
     fun call(userId: String, operation: String, payload: JsonObject, requestId: String): JsonObject = db.transaction { c ->

@@ -79,15 +79,19 @@ Clients always query histories after reconnect, and deduplicate by record id/seq
 
 ## Guarantees
 
-Identity always comes from the authenticated connection. Token sessions last 24h,
-are held in server memory and cease to work after server restart. PINs are 6–12 ASCII
-digits, hashed with salted PBKDF2-HMAC-SHA256 (600000 iterations).
+Identity always comes from the authenticated connection. Tokens are 256 random bits.
+Sessions last 24h and are stored in PostgreSQL, so they survive server restarts; only
+the SHA-256 of each token is stored, never the token itself. At most five sessions
+per account are kept: a sixth login drops the one that expires soonest. Expired
+sessions are purged hourly. PINs are 6–12 ASCII digits, hashed with salted
+PBKDF2-HMAC-SHA256 (600000 iterations).
 
-The server confirms a session's credential version against the database at most once
-every 5 seconds per session (and always on `auth.resume`). After an administrator
-resets a PIN, sockets still authenticated with an older session stop being served
+Resetting a PIN (`admin users reset-pin`) or `admin users logout` deletes the user's
+sessions in the database: `auth.resume` with an old token fails immediately. The
+server reconfirms each live session against the database at most once every 5
+seconds, so sockets already authenticated with a deleted session stop being served
 within 5 seconds: their next request answers UNAUTHENTICATED and no further events
-are written to them. Restart the server if immediate revocation is required.
+are written to them.
 
 For `attendance.mark`, `conversations.direct`, all group mutations, and
 `messages.send`, the request UUID is the durable operation key scoped to the user.

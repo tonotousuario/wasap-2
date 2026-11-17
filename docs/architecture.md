@@ -17,8 +17,9 @@ flowchart LR
 
 La app guarda el token en SecureStore y una operación sin confirmar en
 AsyncStorage. El servidor guarda registros y respuestas de mutaciones en
-PostgreSQL, dentro de una misma transacción. Las sesiones viven en memoria:
-caducan a las 24 horas y se pierden al reiniciar el servidor.
+PostgreSQL, dentro de una misma transacción. Las sesiones también se guardan en
+PostgreSQL (solo el hash SHA-256 del token): caducan a las 24 horas y sobreviven
+a los reinicios del servidor. Restablecer el PIN o `admin users logout` las borra.
 
 ## Entorno local con emulador
 

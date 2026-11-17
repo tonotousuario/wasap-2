@@ -75,6 +75,7 @@ Para probar desde Linux sin abrir Android Studio, sigue la [guía para iniciar e
 docker compose exec server /app/bin/wasap-server admin users add 20260001 'Ana Pérez'
 docker compose exec server /app/bin/wasap-server admin users list
 docker compose exec server /app/bin/wasap-server admin users reset-pin 20260001
+docker compose exec server /app/bin/wasap-server admin users logout 20260001
 docker compose exec server /app/bin/wasap-server admin attendance 20260001 2026-11-01 2026-11-30
 docker compose exec server /app/bin/wasap-server admin attendance '*' 2026-11-01 2026-11-30
 ```
@@ -82,7 +83,9 @@ docker compose exec server /app/bin/wasap-server admin attendance '*' 2026-11-01
 El PIN se solicita sin mostrarlo en una terminal interactiva; no lo pases como
 argumento. Restablecerlo invalida las sesiones anteriores: un teléfono que ya estaba
 conectado deja de recibir datos en un máximo de 5 segundos y se le pide iniciar sesión.
-Si necesitas cortar el acceso al instante, reinicia el servidor. La consulta de asistencia
+`admin users logout` cierra todas las sesiones de una persona sin cambiar su PIN (por
+ejemplo, si perdió el teléfono) e indica cuántas cerró; los teléfonos conectados dejan
+de recibir datos en un máximo de 5 segundos. La consulta de asistencia
 devuelve hasta 100 movimientos y un `nextCursor`; pásalo como último argumento para
 continuar. Las fechas son inclusivas en `APP_TIMEZONE` (America/Mexico_City por defecto).
 
@@ -101,7 +104,7 @@ La app recupera historial al volver del segundo plano y tras reconectar. No crea
 nuevas operaciones sin conexión. Conserva las operaciones ya enviadas que aún no
 tengan confirmación y las reconcilia con el mismo identificador. Cambiar de servidor
 o cerrar sesión no traslada pendientes a otra identidad. Las sesiones caducan a las
-24 horas o al reiniciar el servidor. No hay notificaciones push ni panel web en v1.
+24 horas y sobreviven a los reinicios del servidor. No hay notificaciones push ni panel web en v1.
 
 ## Desarrollo y pruebas
 

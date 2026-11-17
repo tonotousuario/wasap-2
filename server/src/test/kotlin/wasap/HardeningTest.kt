@@ -38,7 +38,7 @@ class HardeningTest {
 
     @Test fun `pin reset revokes live sessions within the revalidation window`() {
         var clock = 0L
-        TestServer(Sessions(clock = { clock })).use { server ->
+        TestServer(clock = { clock }).use { server ->
             server.service.createUser("A001", "Ana", "123456")
             server.connect().use { a ->
                 val token = a.login("A001", "123456").string("token")

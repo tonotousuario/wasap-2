@@ -50,7 +50,7 @@ class TlsServerTest {
             val service = Service(db)
             service.createUser("A001", "Ana", "123456")
             var clock = 0L
-            val server = TcpServer(service, db, Tls.serverContext(dir.resolve("server.p12"), storePassword), "127.0.0.1", 0, Sessions(clock = { clock }))
+            val server = TcpServer(service, db, Tls.serverContext(dir.resolve("server.p12"), storePassword), "127.0.0.1", 0, Sessions(DatabaseSessionStore(db), clock = { clock }))
             try {
                 server.start()
                 fun connect(host: String = "127.0.0.1") = (Tls.clientContext(dir.resolve("ca.crt")).socketFactory.createSocket(host, server.port) as SSLSocket).apply {

@@ -202,7 +202,7 @@ Estos pasos son necesarios antes de distribuir; exportar JavaScript no verifica 
 3. Corta Wi-Fi justo después de enviar asistencia o mensaje. La UI debe bloquear una nueva acción. Fuerza cierre/reinicio, restablece red e inicia sesión con el mismo usuario: debe existir un solo efecto en servidor y debe desaparecer el pendiente tras recuperar su confirmación.
 4. Durante la desconexión, crea más de 100 mensajes desde otro cliente. Reconecta/reanuda; comprueba recuperación paginada sin duplicados ni huecos. Prueba cargar páginas anteriores y una conversación cuyos mensajes máximos requieran páginas menores a 100 para respetar 64 KiB.
 5. Quita un usuario de un grupo desde el creador mientras mantiene el chat abierto. Debe desaparecer de su lista y deben fallar las nuevas consultas/envíos. Verifica que el creador no pueda eliminarse a sí mismo.
-6. Cierra sesión o cambia de servidor con un pendiente; entra con otro usuario. No debe reproducirse la operación anterior. Reinicia el servidor: la sesión anterior debe pedir login otra vez.
+6. Cierra sesión o cambia de servidor con un pendiente; entra con otro usuario. No debe reproducirse la operación anterior. Reinicia el servidor: la app debe reconectar sin pedir matrícula ni PIN. Tras `admin users reset-pin` o `admin users logout`, debe pedir login en un máximo de 5 segundos.
 7. Deniega permiso iOS de red local, cambia a una red inaccesible o usa puerto cerrado; comprueba el error y posterior reconexión al restablecer permisos/conectividad. Prueba segundo plano y regreso al primer plano.
 
 ## Comprobaciones automatizadas

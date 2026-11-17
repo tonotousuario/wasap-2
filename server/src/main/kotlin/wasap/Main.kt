@@ -50,6 +50,10 @@ fun main(args: Array<String>) {
                         require(args.size == 4) { "admin users reset-pin MATRICULA" }
                         service.resetPin(args[3], readPin()); println("PIN actualizado; sesiones anteriores invalidadas")
                     }
+                    listOf("users", "logout") -> {
+                        require(args.size == 4) { "admin users logout MATRICULA" }
+                        println("Sesiones cerradas: ${service.logoutUser(args[3])}")
+                    }
                     listOf("users", "list") -> println(json(service.users()))
                     else -> {
                         require(args.getOrNull(1) == "attendance" && args.size in 3..6) { "admin attendance MATRICULA|* [DESDE YYYY-MM-DD] [HASTA YYYY-MM-DD] [CURSOR]" }
@@ -62,9 +66,11 @@ fun main(args: Array<String>) {
                 val keystore = Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12"))
                 val keystorePassword = secret("TLS_KEYSTORE_PASSWORD")
                 val context = Tls.serverContext(keystore, keystorePassword)
-                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt())
+                val sessions = Sessions(DatabaseSessionStore(db))
+                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions)
                 val maintenance = Maintenance()
                 maintenance.every(1, TimeUnit.HOURS, "processed request purge") { service.purgeProcessedRequests(retention) }
+                maintenance.every(1, TimeUnit.HOURS, "expired session purge") { sessions.purgeExpired() }
                 val expiry = Tls.earliestExpiry(keystore, keystorePassword)
                 maintenance.every(24, TimeUnit.HOURS, "certificate expiry check") { Tls.expiryWarning(expiry)?.let(System.err::println) }
                 val stop = CountDownLatch(1)

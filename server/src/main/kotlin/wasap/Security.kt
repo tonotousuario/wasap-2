@@ -38,50 +38,75 @@ data class User(val id: String, val matricula: String, val name: String) {
     fun toJson() = obj("id" to id, "matricula" to matricula, "name" to name)
 }
 class Session(val token: String, val user: User, val expiresAt: Instant, val credentialVersion: Int, validatedAt: Long) {
-    /** Monotonic instant (Sessions clock) when credential_version was last confirmed in the database. */
+    /** Lookup key: SHA-256 of the token, also the database primary key. */
+    val hash: String = tokenHash(token)
+    /** Monotonic instant (Sessions clock) when the session was last confirmed in the database. */
     @Volatile internal var validatedAt: Long = validatedAt
     fun toJson() = obj("token" to token, "expiresAt" to expiresAt, "user" to user.toJson())
 }
 
 /**
- * In-memory sessions. Credential checks against the database are cached per session and
- * repeated at most once per [revalidateAfterNanos], so a PIN reset revokes sessions within
- * that bound without querying the database for every request, frame or event recipient.
+ * Sessions persisted in [store] (they survive restarts) with an in-memory cache. Each session is
+ * reconfirmed against the store at most once per [revalidateAfterNanos], so revocation (PIN reset,
+ * admin logout) reaches live sockets within that bound without a database read per request,
+ * frame or event recipient.
  */
 class Sessions(
+    private val store: SessionStore,
     private val clock: () -> Long = System::nanoTime,
     private val revalidateAfterNanos: Long = TimeUnit.SECONDS.toNanos(5),
 ) {
-    private val entries = ConcurrentHashMap<String, Session>()
+    private val cache = ConcurrentHashMap<String, Session>()
     private val random = SecureRandom()
-    @Synchronized fun create(user: User, version: Int): Session {
-        entries.entries.removeIf { it.value.expiresAt <= Instant.now() }
-        // Bounded LAN service: at most five remembered logins per account.
-        entries.values.filter { it.user.id == user.id }.sortedBy { it.expiresAt }.dropLast(4).forEach { entries.remove(it.token) }
+
+    fun create(user: User, version: Int): Session {
+        cache.entries.removeIf { it.value.expiresAt <= Instant.now() }
         val token = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32).also(random::nextBytes))
-        return Session(token, user, Instant.now().plusSeconds(86400), version, clock()).also { entries[token] = it }
+        val session = Session(token, user, Instant.now().plusSeconds(86400), version, clock())
+        // Bounded LAN service: at most five remembered logins per account.
+        store.insert(session.hash, user, version, session.expiresAt, keep = 5).forEach(cache::remove)
+        cache[session.hash] = session
+        return session
     }
-    fun get(token: String): Session = entries[token]?.takeIf(::isLive)
-        ?: throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente")
-    fun remove(token: String) { entries.remove(token) }
+
+    /** Session for a stored token, loading it from the store after a restart. */
+    fun get(token: String): Session {
+        val hash = tokenHash(token)
+        cache[hash]?.takeIf(::isLive)?.let { return it }
+        val stored = store.find(hash) ?: run { cache.remove(hash); throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente") }
+        val session = Session(token, stored.user, stored.expiresAt, stored.credentialVersion, clock())
+        return cache.merge(hash, session) { current, loaded -> if (isLive(current)) current else loaded }!!
+    }
+
+    fun remove(token: String) {
+        val hash = tokenHash(token)
+        cache.remove(hash)
+        store.delete(hash)
+    }
+
+    fun purgeExpired(): Int {
+        cache.entries.removeIf { it.value.expiresAt <= Instant.now() }
+        return store.purgeExpired()
+    }
 
     /** Cached validity without touching the database: still registered and not expired. */
-    fun isLive(session: Session): Boolean = entries[session.token] === session && session.expiresAt > Instant.now()
+    fun isLive(session: Session): Boolean = cache[session.hash] === session && session.expiresAt > Instant.now()
 
     /**
-     * Confirms [session] is still valid, consulting [currentVersion] (a database read) only when
-     * the cached check is older than the revalidation interval or [force] is set (resuming a
-     * stored token). Revoked sessions are removed.
+     * Confirms [session] is still valid, reading the store only when the cached check is older
+     * than the revalidation interval or [force] is set (resuming a stored token). Sessions that
+     * were deleted, expired or whose PIN changed are dropped.
      */
-    fun validate(session: Session, currentVersion: (userId: String) -> Int, force: Boolean = false): Session {
+    fun validate(session: Session, force: Boolean = false): Session {
         if (!isLive(session)) throw ApiError("UNAUTHENTICATED", "Inicia sesión nuevamente")
         if (!force && clock() - session.validatedAt < revalidateAfterNanos) return session
         synchronized(session) {
             val now = clock()
             if (!force && now - session.validatedAt < revalidateAfterNanos) return session
-            if (currentVersion(session.user.id) != session.credentialVersion) {
-                entries.remove(session.token, session)
-                throw ApiError("UNAUTHENTICATED", "El PIN cambió; inicia sesión nuevamente")
+            if (!store.isValid(session.hash, session.credentialVersion)) {
+                cache.remove(session.hash, session)
+                store.delete(session.hash)
+                throw ApiError("UNAUTHENTICATED", "Tu sesión terminó; inicia sesión nuevamente")
             }
             session.validatedAt = now
         }

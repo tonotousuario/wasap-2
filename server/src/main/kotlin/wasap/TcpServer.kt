@@ -16,7 +16,7 @@ class TcpServer(
     context: SSLContext,
     host: String,
     requestedPort: Int,
-    private val sessions: Sessions = Sessions(),
+    private val sessions: Sessions = Sessions(DatabaseSessionStore(db)),
 ) : AutoCloseable {
     private val listener = (context.serverSocketFactory.createServerSocket() as SSLServerSocket).apply {
         enabledProtocols = arrayOf("TLSv1.3", "TLSv1.2")
@@ -65,7 +65,7 @@ class TcpServer(
         /** Current session, revalidated against the database at most once per Sessions interval. */
         private fun authenticated(force: Boolean = false): Session {
             val current = session ?: throw ApiError("UNAUTHENTICATED", "Inicia sesión")
-            return try { sessions.validate(current, service::credentialVersion, force) }
+            return try { sessions.validate(current, force) }
             catch (e: ApiError) { replaceSession(null); throw e }
         }
         /** Identity for routing events, from memory only; the writer revalidates before writing. */
