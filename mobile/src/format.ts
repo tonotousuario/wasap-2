@@ -129,10 +129,17 @@ export function customRange(
   return {filters: {...(from ? {from} : {}), ...(to ? {to} : {})}};
 }
 
+/** First and last word that start with a letter, ignoring «(tú)»-style suffixes. */
 export function initials(name: string) {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  const words = name
+    .replace(/\([^)]*\)/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(word => /^\p{L}/u.test(word));
   if (!words.length) return '?';
-  return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
+  const first = [...words[0]][0];
+  const last = words.length > 1 ? [...words[words.length - 1]][0] : '';
+  return (first + last).toLocaleUpperCase('es');
 }
 
 /**
@@ -195,7 +202,12 @@ export function explainError(code: string, message: string): Explained {
     case 'CONNECT_OFFLINE':
       return {title: 'Sin conexión', body: 'Esta acción necesita conexión con el servidor.'};
     case 'CONNECT_CONFIG':
-      return {title: 'Instalación incompleta', body: 'Esta copia de la app no incluye el certificado de instalación.'};
+      return {title: 'Falta el servidor', body: 'Escanea el código QR del servidor para conectarte.'};
+    case 'CONNECT_IDENTITY':
+      return {
+        title: 'Es otro servidor',
+        body: 'En esa dirección responde un servidor distinto al guardado. Escanea de nuevo el código QR de tu servidor.',
+      };
     case 'CONFLICT':
       return {
         title: 'Tu asistencia cambió en otro dispositivo',

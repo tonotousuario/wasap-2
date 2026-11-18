@@ -80,6 +80,35 @@ una profesora. Desde `emulator-5554`, con el APK de release, ella creó las clas
 - Antes de crear las clases, DEMO001 veía Asistencia igual que en la v1, sin chips.
   Con un servidor anterior, sin `classes.list`, la app hace lo mismo (prueba del motor).
 
+## Varios servidores por QR (18 de noviembre de 2026)
+
+Dos servidores locales con CA distintas: «Wasap» (Compose, puerto 5050, CA de
+instalación) y «Profe Beta» (`wasap-server serve` en el puerto 5051, con su propia CA
+creada por `certs init` y certificado de `certs issue`). Ambos enlaces salieron de
+`wasap-server certs qr`. En `emulator-5554` se instaló el APK nuevo encima del anterior,
+que tenía la sesión de PROF01.
+
+| Lista de servidores                                                                                      | Confirmar con la huella                                                                                                         | Otro servidor en la misma dirección                                                                    | Escáner                                                                                                                | Iniciales                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| <img src="images/android-servers.png" alt="Wasap Android: dos servidores, ambos con sesión" width="150"> | <img src="images/android-server-enroll.png" alt="Wasap Android: añadir Profe Beta con dirección y huella de la CA" width="150"> | <img src="images/android-server-identity.png" alt="Wasap Android: aviso Es otro servidor" width="150"> | <img src="images/android-server-scan.png" alt="Wasap Android: escáner con la cámara virtual del emulador" width="150"> | <img src="images/android-members-initials.png" alt="Wasap Android: Integrantes con PR para Profa. Rivera (tú)" width="150"> |
+
+- **Migración:** al abrir el APK nuevo, la sesión de PROF01 siguió activa sin pedir PIN;
+  el servidor de instalación tomó el identificador y el nombre de `server.hello`.
+- **Alta:** «Profe Beta» se añadió pegando su enlace. La huella mostrada
+  (`70FB FBA3 DD3D 5241`) coincide con la que imprime la consola.
+- **Otro servidor en la misma dirección:** la base de pruebas vive en memoria y se
+  borró al reiniciarse; «Profe Beta» arrancó con un identificador nuevo y la misma CA.
+  La app mostró «Es otro servidor» y no envió credenciales. Tras eliminar el servidor
+  viejo y añadir el QR nuevo, DEMO001 entró en Beta.
+- **Cambio de servidor:** Wasap → Beta → Wasap desde Ajustes, sin volver a escribir el
+  PIN; cada uno mostró solo sus chats y su asistencia.
+- **Eliminar:** borrar el servidor activo volvió a «Wasap» con su sesión intacta.
+- **Escáner:** la cámara se pide solo al tocar «Escanear»; la vista previa funciona. La
+  lectura real de un QR no se probó en el emulador (su cámara muestra una escena
+  virtual); el formato del QR sí se probó decodificando el PNG en las pruebas del
+  servidor.
+- **Iniciales:** «Profa. Rivera (tú)» muestra «PR».
+
 ## Comprobaciones realizadas
 
 | Área               | Evidencia                                                                   | Alcance                                                                                                       |

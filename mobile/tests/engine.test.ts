@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {Engine} from '../src/engine.ts';
 import {ProtocolError} from '../src/state.ts';
 import type {Envelope} from '../src/protocol.ts';
+import {createHash} from 'node:crypto';
+
+export const sha256 = async (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+export const INSTALLATION_CA = '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n';
 
 class Memory {
   values = new Map<string, string>();
@@ -47,6 +51,8 @@ function setup() {
     storage,
     secure,
     uuid: () => String(++id),
+    sha256,
+    installationCa: INSTALLATION_CA,
     connect: async (server, event, close) => {
       onEvent = event;
       onClose = close;
@@ -423,6 +429,7 @@ test('logout clears local identity immediately but lets server revocation finish
 });
 test('a lost acknowledgement reports which operation is pending until reconnection settles it', async () => {
   const t = setup();
+  await t.engine.initialize();
   await t.engine.login('123', '123456');
   const prior = t.setHandler(async (type, payload) => {
     if (type === 'attendance.mark') throw new Error('lost');
@@ -442,6 +449,7 @@ test('a lost acknowledgement reports which operation is pending until reconnecti
 });
 test('failures expose a stable code for the interface and can be dismissed', async () => {
   const t = setup();
+  await t.engine.initialize();
   const prior = t.setHandler(async (type, payload) => {
     if (type === 'auth.login') throw new ProtocolError('INVALID_CREDENTIALS', 'Credenciales inválidas');
     return prior(type, payload);
@@ -572,6 +580,8 @@ test('a restarted app resumes its queue in order with the original UUIDs', async
     storage: t.storage,
     secure: t.secure,
     uuid: () => 'new-' + Math.random(),
+    sha256,
+    installationCa: INSTALLATION_CA,
     connect: async () => ({
       closed: false,
       close() {},

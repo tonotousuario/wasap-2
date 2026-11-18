@@ -65,9 +65,40 @@ tu PIN.
 - **Icono y splash:** las fuentes vectoriales están en `assets/brand/*.svg`;
   `assets/brand/build.sh` regenera los PNG.
 
-## Preparar la CA pública
+## Añadir servidores con su código QR
 
-Requiere Node 22.18 o posterior, npm y el certificado público de la CA que firmó el servidor. El servidor genera `certs/ca.crt` con `scripts/create-certs.sh`.
+Un mismo APK sirve en cualquier escuela: cada servidor se añade escaneando su código QR
+(Ajustes → Servidor → **Escanear código QR**) o pegando su enlace `wasap://server?…`. El
+QR lleva el identificador, el nombre, hasta 5 direcciones y el certificado de la CA del
+servidor; la app confía en esa CA solo para ese servidor. Antes de guardarlo muestra la
+huella abreviada de la CA para compararla con la de la consola.
+
+En el servidor, `wasap-server certs qr` imprime el QR en la terminal (cabe en 80
+columnas) y el enlace; `--png qr.png` lo guarda para imprimirlo (8 cm o más) y
+`--address HOST[:PUERTO]` elige las direcciones (por defecto, las del certificado sin
+`127.0.0.1`).
+
+| Servidores                                                                                                        | Confirmar un servidor                                                                                                       | Otro servidor en la misma dirección                                                                               |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| <img src="../docs/images/android-servers.png" alt="Lista de servidores con sesión en dos servidores" width="180"> | <img src="../docs/images/android-server-enroll.png" alt="Añadir servidor: nombre, dirección y huella de la CA" width="180"> | <img src="../docs/images/android-server-identity.png" alt="Aviso Es otro servidor al iniciar sesión" width="180"> |
+
+- Hasta 10 servidores, cada uno con su sesión: cambiar de uno a otro no pide el PIN.
+- La app prueba las direcciones en orden (5 s cada una) y empieza por la última que
+  funcionó. Un error de certificado detiene la lista: no es un problema de red.
+- Tras conectar pide `server.hello`; si responde otro servidor (otro identificador u
+  otra CA) cierra la conexión sin enviar la matrícula ni el PIN.
+- Escanear un servidor ya guardado actualiza su nombre y sus direcciones. Si trae otra
+  CA, la app advierte que su identidad cambió y solo la reemplaza tras confirmarlo
+  (y entonces borra la sesión anterior).
+- Eliminar un servidor borra su sesión y lo que tuviera pendiente de enviar.
+
+## Preparar la CA pública (opcional)
+
+Requiere Node 22.18 o posterior y npm. La CA de compilación es opcional: si existe,
+define un servidor «de instalación» que se configura a mano (IP y puerto), como en la
+v1. Sin ella, los servidores solo se añaden por QR. Al actualizar desde la v1, el
+servidor y la sesión guardados pasan a ser ese servidor de instalación sin pedir PIN.
+El servidor genera `certs/ca.crt` con `scripts/create-certs.sh`.
 
 Desde la raíz del repositorio:
 
@@ -80,9 +111,9 @@ npm run typecheck
 npx expo config --type public
 ```
 
-`WASAP_CA_PEM` contiene el TEXTO PEM completo; también admite saltos representados por `\n`. `app.config.ts` valida que sea exactamente un certificado CA público y lo incorpora en `extra.installationCaPem`. El cliente pasa ese texto directamente a TLS. No utiliza `require('ca.pem')`, rutas de assets, ni descargas HTTP de Metro para obtener certificados. La CA pública es visible dentro de la aplicación; nunca proporciones `ca.key`, `server.p12`, contraseñas ni PINs como configuración móvil. El proceso de compilación falla si falta la CA o se proporciona una clave privada o un certificado de hoja.
+`WASAP_CA_PEM` contiene el TEXTO PEM completo; también admite saltos representados por `\n`. `app.config.ts` valida que sea exactamente un certificado CA público y lo incorpora en `extra.installationCaPem`. El cliente pasa ese texto directamente a TLS. No utiliza `require('ca.pem')`, rutas de assets, ni descargas HTTP de Metro para obtener certificados. La CA pública es visible dentro de la aplicación; nunca proporciones `ca.key`, `server.p12`, contraseñas ni PINs como configuración móvil. El proceso de compilación falla si se proporciona una clave privada, más de un certificado o un certificado de hoja. Sin `WASAP_CA_PEM` se usa `../certs/ca.crt` si existe; `WASAP_CA_PEM=none` compila una app que solo admite servidores por QR.
 
-En la pantalla **Servidor**, guarda la IP/nombre y puerto TLS (5050 por defecto). En un dispositivo físico usa la IP LAN del servidor. En el emulador Android, el host anfitrión suele ser `10.0.2.2`; esa IP también debe estar en el SAN del certificado. Cambiar de IP requiere un certificado de servidor nuevo firmado por la misma CA e incluyendo la nueva IP en su SAN. Rotar la CA requiere volver a compilar la app.
+Para el servidor de instalación, en **Servidores → editar dirección**, guarda la IP/nombre y puerto TLS (5050 por defecto). En un dispositivo físico usa la IP LAN del servidor. En el emulador Android, el host anfitrión suele ser `10.0.2.2`; esa IP también debe estar en el SAN del certificado. Cambiar de IP requiere un certificado de servidor nuevo firmado por la misma CA e incluyendo la nueva IP en su SAN. Rotar la CA de instalación requiere volver a compilar la app; la de un servidor añadido por QR se renueva escaneando su QR nuevo.
 
 ## Compilación local Android
 

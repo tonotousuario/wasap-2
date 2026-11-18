@@ -13,11 +13,11 @@
 ## Decisions
 
 ### D1. La CA viaja completa en el QR
-El parche nativo necesita el certificado de la CA como ancla antes del handshake. Llevar solo la huella obligaría a un modo nativo nuevo («conectar, capturar cadena, comparar»), más código de seguridad sin probar. Una CA RSA 3072 en DER base64url ocupa ~1,3 KB: cabe en un QR de nivel de corrección M (versión ~27), legible desde una pantalla o impreso a 6 cm. La huella abreviada se muestra para verificación humana.
+El parche nativo necesita el certificado de la CA como ancla antes del handshake. Llevar solo la huella obligaría a un modo nativo nuevo («conectar, capturar cadena, comparar»), más código de seguridad sin probar. Con una CA RSA 3072 el enlace completo ocupa ~1,5 KB: cabe en un QR de nivel de corrección M (versión ~32, 145 módulos), legible desde una pantalla o impreso a 8 cm o más. En la consola se dibuja con bloques de cuadrante (2×2 módulos por carácter) para caber en 80 columnas. La huella abreviada se muestra para verificación humana.
 - *Alternativa descartada:* descargar la CA del servidor en el primer contacto (TOFU sin QR): un atacante en la LAN podría suplantar el primer contacto.
 
 ### D2. Modelo de datos en la app
-`servers:<id>` en AsyncStorage (`{id, name, addresses[], lastAddress, caPem, addedAt}`) y `wasap.session:<serverId>` en SecureStore. El servidor de instalación (si hay CA de compilación) usa `id = "installation"` hasta que su `server.hello` revele el ID real, momento en que se migra. `Engine` recibe el servidor activo; cambiarlo cierra la conexión actual, limpia el estado en memoria y abre la del otro con su sesión.
+La lista `servers` y el activo `servers.active` en AsyncStorage (`{id, name, addresses[], lastAddress, caPem, fingerprint, scope, manual?, addedAt}`) y `wasap.session.<serverId>` en SecureStore (sus claves no admiten «:»). `scope` es el prefijo de la cola y las cachés: el servidor migrado conserva el de la v1 (`[host, puerto]`), así su pendiente mantiene UUID y ámbito. El servidor de instalación (si hay CA de compilación) usa `id = "installation"` hasta que su `server.hello` revele el ID real, momento en que se migra. `Engine` recibe el servidor activo; cambiarlo cierra la conexión actual, limpia el estado en memoria y abre la del otro con su sesión.
 
 ### D3. Conexión por direcciones
 `connect` prueba `[lastAddress, ...resto]` con `connectTimeout` de 5 s; ante error de red pasa a la siguiente, ante error de certificado se detiene (no es un problema de red). Tras el handshake verifica `server.hello` (D1 de `server-enrollment`).

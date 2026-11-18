@@ -9,7 +9,11 @@ export type Route =
   | {name: 'newChat'}
   | {name: 'newGroup'}
   | {name: 'classReport'; id: string}
-  | {name: 'server'};
+  | {name: 'server'}
+  | {name: 'serverAddress'}
+  | {name: 'scan'}
+  | {name: 'pasteLink'}
+  | {name: 'enroll'; text: string};
 export type Navigation = {
   push(route: Route): void;
   pop(): void;

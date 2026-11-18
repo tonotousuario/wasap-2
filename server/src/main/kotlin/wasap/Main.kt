@@ -47,6 +47,36 @@ private fun readSecret(prompt: String, confirm: Boolean): CharArray {
 
 private fun tlsDirectory() = TlsDirectory(Path.of(env("TLS_DIR", "/var/lib/wasap/tls")))
 
+/** The keystore the server serves: a certificate issued into TLS_DIR wins over TLS_KEYSTORE. */
+private fun servingKeystore(tls: TlsDirectory): Pair<Path, String> = if (tls.hasIssuedCertificate()) {
+    tls.keystore to tls.readKeystorePassword()
+} else {
+    Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12")) to secret("TLS_KEYSTORE_PASSWORD")
+}
+
+/** `certs qr`: prints the enrollment link and QR, optionally also as PNG. */
+private fun serverQr(service: Service, args: List<String>) {
+    val tls = tlsDirectory()
+    val (keystore, password) = servingKeystore(tls)
+    val ca = Tls.caFromKeystore(keystore, password)
+        ?: tls.caCertificate.takeIf { Files.exists(it) }?.let(Tls::readCertificate)
+        ?: System.getenv("TLS_CA_FILE")?.let { Tls.readCertificate(Path.of(it)) }
+        ?: invalid("No se encontró el certificado de la CA")
+    val port = env("SERVER_PUBLIC_PORT", env("SERVER_PORT", "5050")).toInt()
+    val addresses = options(args, "--address").map { ServerQr.withPort(it, port) }
+        .ifEmpty { ServerQr.defaultHosts(keystore, password).map { ServerQr.address(it, port) } }
+    val identity = service.serverIdentity()
+    val link = ServerQr.link(identity.id, identity.name, addresses, ca)
+    val matrix = ServerQr.matrix(link, margin = 2)
+    print(ServerQr.terminal(matrix))
+    println("Servidor «${identity.name}» · ${addresses.joinToString()} · CA ${Tls.fingerprint(ca).take(23)}…")
+    println(link)
+    options(args, "--png").lastOrNull()?.let { path ->
+        ServerQr.png(ServerQr.matrix(link), Path.of(path))
+        println("PNG guardado en $path")
+    }
+}
+
 /** Values of a repeatable `--flag value` option. */
 private fun options(args: List<String>, flag: String): List<String> = args.indices.filter { args[it] == flag }.map {
     args.getOrNull(it + 1) ?: invalid("Falta el valor de $flag")
@@ -95,13 +125,13 @@ private fun certs(args: List<String>) {
 
         "status" -> println(CertificateStatus.describe(tls))
 
-        else -> invalid("Usa: certs init [NOMBRE] | import RUTA_CA_KEY [RUTA_CA_CRT] | issue [--address IP]... [--dns NOMBRE]... [--days N] | status")
+        else -> invalid("Usa: certs init [NOMBRE] | import RUTA_CA_KEY [RUTA_CA_CRT] | issue [--address IP]... [--dns NOMBRE]... [--days N] | status | qr [--address HOST[:PUERTO]]... [--png RUTA]")
     }
 }
 
 fun main(args: Array<String>) {
     try {
-        if (args.firstOrNull() == "certs") {
+        if (args.firstOrNull() == "certs" && args.getOrNull(1) != "qr") {
             certs(args.drop(1))
             return
         }
@@ -118,10 +148,12 @@ fun main(args: Array<String>) {
             return
         }
         // Validate serve-only settings before touching the database.
-        val retention = if (args.firstOrNull() == "admin") 0 else retentionDays(System.getenv("PROCESSED_REQUEST_RETENTION_DAYS"))
+        val retention = if (args.firstOrNull() in setOf("admin", "certs")) 0 else retentionDays(System.getenv("PROCESSED_REQUEST_RETENTION_DAYS"))
         Database(env("DB_URL"), env("DB_USER"), secret("DB_PASSWORD"), env("DB_SCHEMA", "public"), env("DB_ALLOW_INSECURE", "false") == "true").use { db ->
             val service = Service(db, ZoneId.of(env("APP_TIMEZONE", "America/Mexico_City")))
-            if (args.firstOrNull() == "admin") {
+            if (args.firstOrNull() == "certs") {
+                serverQr(service, args.drop(2))
+            } else if (args.firstOrNull() == "admin") {
                 when (args.drop(1).take(2)) {
                     listOf("users", "add") -> {
                         require(args.size == 5) { "admin users add MATRICULA 'Nombre completo'" }
@@ -172,11 +204,7 @@ fun main(args: Array<String>) {
                 require(args.isEmpty() || args.toList() == listOf("serve")) { "Use serve, healthcheck or admin" }
                 // A certificate issued into TLS_DIR wins; otherwise the provisioned TLS_KEYSTORE is used.
                 val tls = tlsDirectory()
-                val (keystore, keystorePassword) = if (tls.hasIssuedCertificate()) {
-                    tls.keystore to tls.readKeystorePassword()
-                } else {
-                    Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12")) to secret("TLS_KEYSTORE_PASSWORD")
-                }
+                val (keystore, keystorePassword) = servingKeystore(tls)
                 val serverTls = ReloadableServerTls(keystore, keystorePassword)
                 val context = serverTls.context
                 val watcher = CertificateWatcher(tls, serverTls)

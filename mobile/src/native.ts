@@ -8,16 +8,21 @@ import {Engine, type Dependencies} from './engine';
 import {RpcClient} from './client';
 import {ConnectError, classifyConnectFailure} from './errors';
 
+const buildCa = Constants.expoConfig?.extra?.installationCaPem;
+const installationCa = typeof buildCa === 'string' && buildCa.includes('BEGIN CERTIFICATE') ? buildCa : null;
+
+// Each server is trusted only through its own CA: the one in its QR, or the build-time one.
 const connect: Dependencies['connect'] = (server, onEvent, onDisconnect) =>
   new Promise((resolve, reject) => {
-    const ca = Constants.expoConfig?.extra?.installationCaPem;
-    if (typeof ca !== 'string' || !ca.includes('BEGIN CERTIFICATE')) {
-      reject(new ConnectError('config', 'Falta la CA de instalación. Recompila con WASAP_CA_PEM.'));
+    const ca = server.caPem;
+    if (!ca.includes('BEGIN CERTIFICATE')) {
+      reject(new ConnectError('config', 'Escanea el código QR del servidor antes de conectar.'));
       return;
     }
     let client: RpcClient | undefined;
     let finished = false;
-    const options = {host: server.host, port: server.port, ca, rejectUnauthorized: true, connectTimeout: 10000};
+    // 5 s per address: the engine moves on to the next one when this one does not answer.
+    const options = {host: server.host, port: server.port, ca, rejectUnauthorized: true, connectTimeout: 5000};
     const timer = setTimeout(
       () =>
         fail(
@@ -27,7 +32,7 @@ const connect: Dependencies['connect'] = (server, onEvent, onDisconnect) =>
             'tiempo de conexión agotado',
           ),
         ),
-      15000,
+      7000,
     );
     const socket = TcpSocket.connectTLS(options, () => {
       if (finished) return;
@@ -83,4 +88,9 @@ export const engine = new Engine({
   },
   uuid: () => Crypto.randomUUID(),
   connect,
+  sha256: async bytes => {
+    const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, new Uint8Array(bytes));
+    return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+  },
+  installationCa,
 });

@@ -14,6 +14,35 @@ import type {
 } from './types.ts';
 import {ConnectError, errorCode, errorDetail} from './errors.ts';
 import {presetRange, type RangePreset} from './format.ts';
+import {joinAddress, parseServerLink, pemToDer, splitAddress, type ServerLink} from './enrollment.ts';
+
+export const MAX_SERVERS = 10;
+const INSTALLATION = 'installation';
+/** SecureStore keys allow only letters, digits, «.», «-» and «_». */
+const sessionKey = (serverId: string) => 'wasap.session.' + serverId.replace(/[^A-Za-z0-9._-]/g, '_');
+
+/** A server the app knows, with its own trust anchor and session. */
+export type SavedServer = {
+  id: string;
+  name: string;
+  /** host:port, in preference order. */
+  addresses: string[];
+  /** Last address that answered; tried first. */
+  lastAddress: string | null;
+  caPem: string | null;
+  /** SHA-256 of the CA (lowercase hex), compared with server.hello. */
+  fingerprint: string | null;
+  /** Prefix of the outbox/cache keys; kept when the installation server learns its real id. */
+  scope: string;
+  /** The build-time installation server, editable by hand. */
+  manual?: boolean;
+  addedAt: string;
+};
+/** What a scanned or pasted link would do, before the user confirms. */
+export type ServerPreview =
+  | {ok: false; reason: string}
+  | {ok: true; link: ServerLink; fingerprint: string; status: 'new' | 'known' | 'ca-changed'};
+export type ConnectTarget = Server & {caPem: string};
 export type Connection = {
   closed: boolean;
   request(type: string, payload: Record<string, unknown>, id: string): Promise<any>;
@@ -23,11 +52,21 @@ export type Dependencies = {
   storage: Storage;
   secure: Storage;
   uuid: () => string;
-  connect: (server: Server, event: (e: Envelope) => void, close: (e: Error) => void) => Promise<Connection>;
+  connect: (target: ConnectTarget, event: (e: Envelope) => void, close: (e: Error) => void) => Promise<Connection>;
+  /** SHA-256 as lowercase hex. */
+  sha256: (bytes: Uint8Array) => Promise<string>;
+  /** CA PEM embedded at build time; defines the hand-configurable installation server. */
+  installationCa?: string | null;
+  now?: () => string;
 };
 export type AttendanceFilters = {from?: string; to?: string};
 export type AppState = {
+  /** Address of the active server being used (or about to be). */
   server: Server;
+  servers: SavedServer[];
+  activeServerId: string | null;
+  /** Servers with a stored session. */
+  signedIn: string[];
   session: Session | null;
   online: boolean;
   busy: boolean;
@@ -54,6 +93,9 @@ export type AppState = {
 export class Engine {
   state: AppState = {
     server: {host: '192.168.1.2', port: 5050},
+    servers: [],
+    activeServerId: null,
+    signedIn: [],
     session: null,
     online: false,
     busy: false,
@@ -107,28 +149,94 @@ export class Engine {
     const ops = (await this.journal?.load()) ?? [];
     return {pending: ops.length > 0, pendingCount: ops.length, pendingType: ops[0]?.type ?? null, outbox: ops};
   }
-  private serverScope() {
-    return JSON.stringify([this.state.server.host.toLowerCase(), this.state.server.port]);
+  activeServer(): SavedServer | null {
+    return this.state.servers.find(server => server.id === this.state.activeServerId) ?? null;
   }
-  private userScope(session: Session) {
-    return JSON.stringify([this.state.server.host.toLowerCase(), this.state.server.port, session.user.id]);
+  private userScope(session: Session, server = this.activeServer()) {
+    return JSON.stringify([...JSON.parse(server?.scope ?? '[]'), session.user.id]);
+  }
+  private now() {
+    return this.deps.now?.() ?? new Date().toISOString();
+  }
+  private addressOf(server: SavedServer | null): Server {
+    const parts = server && splitAddress(server.lastAddress ?? server.addresses[0] ?? '');
+    return parts ?? this.state.server;
+  }
+  private async saveServers(servers: SavedServer[], activeServerId = this.state.activeServerId) {
+    await this.deps.storage.setItem('servers', JSON.stringify(servers));
+    if (activeServerId) await this.deps.storage.setItem('servers.active', activeServerId);
+    else await this.deps.storage.removeItem('servers.active');
+    const active = servers.find(server => server.id === activeServerId) ?? null;
+    this.update({servers, activeServerId: active?.id ?? null, server: this.addressOf(active)});
+  }
+  private async markSignedIn(serverId: string, signedIn: boolean) {
+    const others = this.state.signedIn.filter(id => id !== serverId);
+    this.update({signedIn: signedIn ? [...others, serverId] : others});
+  }
+  private async storeSession(session: Session | null, serverId = this.state.activeServerId) {
+    if (!serverId) return;
+    if (session) await this.deps.secure.setItem(sessionKey(serverId), JSON.stringify(session));
+    else await this.deps.secure.removeItem(sessionKey(serverId));
+    await this.markSignedIn(serverId, !!session);
+  }
+  /** Loads the server list, migrating the single v1 server (and its session) on first run. */
+  private async loadServers() {
+    const raw = await this.deps.storage.getItem('servers');
+    let servers: SavedServer[] = raw ? JSON.parse(raw) : [];
+    let active = await this.deps.storage.getItem('servers.active');
+    const ca = this.deps.installationCa;
+    if (!raw && ca) {
+      const legacy = JSON.parse((await this.deps.storage.getItem('server')) ?? 'null') ?? this.state.server;
+      const host = String(legacy.host).toLowerCase();
+      const scope = JSON.stringify([host, legacy.port]);
+      servers = [
+        {
+          id: INSTALLATION,
+          name: 'Servidor de instalación',
+          addresses: [joinAddress(host, legacy.port)],
+          lastAddress: null,
+          caPem: ca,
+          fingerprint: null,
+          scope,
+          manual: true,
+          addedAt: this.now(),
+        },
+      ];
+      active = INSTALLATION;
+      const saved = await this.deps.secure.getItem('wasap.session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.server === scope)
+          await this.deps.secure.setItem(sessionKey(INSTALLATION), JSON.stringify(parsed.session));
+        await this.deps.secure.removeItem('wasap.session');
+      }
+      await this.deps.storage.removeItem('server');
+    }
+    for (const server of servers)
+      if (server.caPem && !server.fingerprint) server.fingerprint = await this.deps.sha256(pemToDer(server.caPem));
+    const signedIn: string[] = [];
+    for (const server of servers) if (await this.deps.secure.getItem(sessionKey(server.id))) signedIn.push(server.id);
+    this.update({signedIn});
+    await this.saveServers(servers, servers.some(server => server.id === active) ? active : (servers[0]?.id ?? null));
+  }
+  /** Restores the active server's stored session, if any, and reconnects. */
+  private async resumeStored() {
+    const server = this.activeServer();
+    if (!server) return;
+    const saved = await this.deps.secure.getItem(sessionKey(server.id));
+    if (!saved) return;
+    const session: Session = JSON.parse(saved);
+    this.journal = new Outbox(this.deps.storage, this.userScope(session, server));
+    this.update({session, ...(await this.pendingPatch())});
+    try {
+      await this.reconnect();
+    } catch (error) {
+      this.report(error);
+    }
   }
   async initialize() {
-    const config = await this.deps.storage.getItem('server');
-    if (config) this.update({server: JSON.parse(config)});
-    const saved = await this.deps.secure.getItem('wasap.session');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.server === this.serverScope()) {
-        this.journal = new Outbox(this.deps.storage, this.userScope(parsed.session));
-        this.update({session: parsed.session, ...(await this.pendingPatch())});
-        try {
-          await this.reconnect();
-        } catch (error) {
-          this.report(error);
-        }
-      } else await this.deps.secure.removeItem('wasap.session');
-    }
+    await this.loadServers();
+    await this.resumeStored();
   }
   report(error: unknown) {
     this.update({error: errorDetail(error), errorCode: errorCode(error)});
@@ -136,24 +244,99 @@ export class Engine {
   clearError() {
     if (this.state.error || this.state.errorCode) this.update({error: '', errorCode: ''});
   }
+  /**
+   * Connects to the active server trying its addresses (last good one first). Network failures
+   * move on to the next address; certificate and identity failures stop, since another address
+   * cannot fix them. No credentials are sent before server.hello matches the saved server.
+   */
   private async open() {
     this.connection?.close();
     const generation = ++this.generation;
-    const connection = await this.deps.connect(
-      this.state.server,
-      event => {
-        if (generation === this.generation) this.onEvent(event);
-      },
-      error => {
-        if (generation === this.generation)
-          this.update({online: false, error: errorDetail(error), errorCode: errorCode(error)});
-      },
-    );
-    if (generation !== this.generation) {
-      connection.close();
-      throw new Error('Conexión cancelada');
+    const server = this.activeServer();
+    if (!server) throw new ConnectError('config', 'Añade un servidor escaneando su código QR.');
+    if (!server.caPem) throw new ConnectError('config', 'Escanea el código QR del servidor antes de conectar.');
+    const order = [
+      ...new Set(
+        [server.lastAddress, ...server.addresses].filter((a): a is string => !!a && server.addresses.includes(a)),
+      ),
+    ];
+    let failure: unknown = new ConnectError('unreachable', 'El servidor no tiene direcciones.');
+    for (const address of order) {
+      const target = splitAddress(address);
+      if (!target) continue;
+      this.update({server: target});
+      let connection: Connection;
+      try {
+        connection = await this.deps.connect(
+          {...target, caPem: server.caPem},
+          event => {
+            if (generation === this.generation) this.onEvent(event);
+          },
+          error => {
+            if (generation === this.generation)
+              this.update({online: false, error: errorDetail(error), errorCode: errorCode(error)});
+          },
+        );
+      } catch (error) {
+        if (generation !== this.generation) throw new Error('Conexión cancelada');
+        if (error instanceof ConnectError && (error.kind === 'tls' || error.kind === 'config')) throw error;
+        failure = error;
+        continue;
+      }
+      if (generation !== this.generation) {
+        connection.close();
+        throw new Error('Conexión cancelada');
+      }
+      try {
+        await this.verifyIdentity(connection, server);
+      } catch (error) {
+        connection.close();
+        throw error;
+      }
+      if (generation !== this.generation) {
+        connection.close();
+        throw new Error('Conexión cancelada');
+      }
+      this.connection = connection;
+      const current = this.activeServer();
+      if (current && current.lastAddress !== address)
+        await this.saveServers(this.state.servers.map(s => (s.id === current.id ? {...s, lastAddress: address} : s)));
+      return;
     }
-    this.connection = connection;
+    throw failure;
+  }
+  private async verifyIdentity(connection: Connection, server: SavedServer) {
+    let hello: {serverId?: string; name?: string; caFingerprint?: string | null};
+    try {
+      hello = await connection.request('server.hello', {}, this.deps.uuid());
+    } catch (error) {
+      // v1 servers do not know server.hello; only the hand-configured server may be one.
+      if (server.manual && error instanceof ProtocolError && error.code === 'VALIDATION') return;
+      throw error;
+    }
+    const otherServer = () =>
+      new ConnectError(
+        'identity',
+        'En esa dirección responde otro servidor Wasap. Escanea de nuevo el código QR de tu servidor.',
+        `esperado ${server.id}, recibido ${hello.serverId ?? 'sin identificador'}`,
+      );
+    if (hello.caFingerprint && server.fingerprint && hello.caFingerprint !== server.fingerprint) throw otherServer();
+    if (server.id === INSTALLATION) {
+      if (hello.serverId) await this.adoptServerId(hello.serverId, hello.name);
+    } else if (hello.serverId !== server.id) throw otherServer();
+  }
+  /** The installation server learned its real id: rename it, keeping its session and scope. */
+  private async adoptServerId(serverId: string, name?: string) {
+    const duplicate = this.state.servers.find(s => s.id === serverId);
+    if (duplicate) await this.storeSession(null, duplicate.id);
+    const saved = await this.deps.secure.getItem(sessionKey(INSTALLATION));
+    if (saved) await this.deps.secure.setItem(sessionKey(serverId), saved);
+    await this.storeSession(null, INSTALLATION);
+    if (saved) await this.markSignedIn(serverId, true);
+    const servers = this.state.servers
+      .filter(s => s.id !== serverId)
+      .map(s => (s.id === INSTALLATION ? {...s, id: serverId, name: name || s.name} : s));
+    await this.saveServers(servers, this.state.activeServerId === INSTALLATION ? serverId : this.state.activeServerId);
   }
   private async activate(session: Session) {
     if (this.state.session && this.state.session.user.id !== session.user.id) {
@@ -171,7 +354,7 @@ export class Engine {
       });
     }
     this.journal = new Outbox(this.deps.storage, this.userScope(session));
-    await this.deps.secure.setItem('wasap.session', JSON.stringify({server: this.serverScope(), session}));
+    await this.storeSession(session);
     this.update({session, needsLogin: false, online: true, error: '', errorCode: '', ...(await this.pendingPatch())});
     await this.reconcile();
     await this.refresh();
@@ -205,7 +388,7 @@ export class Engine {
       await this.activate(resumed);
     } catch (error) {
       if (error instanceof ProtocolError && ['UNAUTHENTICATED', 'INVALID_CREDENTIALS'].includes(error.code)) {
-        await this.deps.secure.removeItem('wasap.session');
+        await this.storeSession(null);
         this.update({needsLogin: true, online: false});
       }
       this.report(error);
@@ -232,7 +415,7 @@ export class Engine {
         ++this.generation;
         this.connection = null;
         connection.close();
-        await this.deps.secure.removeItem('wasap.session');
+        await this.storeSession(null);
         // Retain the user identity/journal so reauthentication by the same user
         // can settle the original durable request rather than create a new one.
         this.update({online: false, needsLogin: true, error: error.message, errorCode: error.code});
@@ -589,34 +772,121 @@ export class Engine {
     if (this.operation) await this.operation.catch(() => {});
     if (this.draining) await this.draining.catch(() => {});
     this.rejectWaiters(new Error('Sesión cerrada'));
-    await this.deps.secure.removeItem('wasap.session');
+    await this.storeSession(null);
     await this.journal?.discard();
     this.journal = null;
     this.recovered = {};
     ++this.attendanceHistoryGeneration;
-    this.update({
-      session: null,
-      online: false,
-      busy: false,
-      pending: false,
-      pendingCount: 0,
-      outbox: [],
-      failed: {},
-      pendingType: null,
-      needsLogin: false,
-      error: '',
-      errorCode: '',
-      messages: {},
-      conversations: [],
-      events: [],
-      attendance: null,
-      attendanceCursor: null,
-      attendanceFilters: {},
-      classes: [],
-      attendanceClassId: null,
-      older: {},
-    });
+    this.update({...Engine.EMPTY_VIEW, busy: false});
   }
+  /** Everything shown for one server and session; cleared when either changes. */
+  private static readonly EMPTY_VIEW: Partial<AppState> = {
+    session: null,
+    online: false,
+    busy: false,
+    pending: false,
+    pendingCount: 0,
+    outbox: [],
+    failed: {},
+    pendingType: null,
+    needsLogin: false,
+    error: '',
+    errorCode: '',
+    messages: {},
+    conversations: [],
+    events: [],
+    attendance: null,
+    attendanceCursor: null,
+    attendanceFilters: {},
+    classes: [],
+    attendanceClassId: null,
+    older: {},
+  };
+  /** Stops using the active server without signing out of it (switching servers). */
+  private async suspend() {
+    const connection = this.connection;
+    ++this.generation;
+    this.connection = null;
+    connection?.close();
+    this.update({busy: true, online: false});
+    if (this.operation) await this.operation.catch(() => {});
+    if (this.draining) await this.draining.catch(() => {});
+    this.rejectWaiters(new Error('Cambiaste de servidor'));
+    this.journal = null;
+    this.recovered = {};
+    ++this.attendanceHistoryGeneration;
+    this.update({...Engine.EMPTY_VIEW, busy: false});
+  }
+  /** Makes [serverId] active, keeping every other server's session. */
+  async selectServer(serverId: string) {
+    if (serverId === this.state.activeServerId) return;
+    if (!this.state.servers.some(server => server.id === serverId)) throw new Error('Servidor desconocido');
+    await this.suspend();
+    await this.saveServers(this.state.servers, serverId);
+    await this.resumeStored();
+  }
+  /** Parses a scanned or pasted link and says whether it is new, known or a changed identity. */
+  async previewServer(text: string): Promise<ServerPreview> {
+    const parsed = parseServerLink(text);
+    if (!parsed.ok) return parsed;
+    const fingerprint = await this.deps.sha256(parsed.server.caDer);
+    const existing = this.state.servers.find(server => server.id === parsed.server.id);
+    const status = !existing ? 'new' : existing.fingerprint === fingerprint ? 'known' : 'ca-changed';
+    if (status === 'new' && this.state.servers.length >= MAX_SERVERS)
+      return {ok: false, reason: `Puedes guardar hasta ${MAX_SERVERS} servidores. Elimina uno para añadir otro.`};
+    return {ok: true, link: parsed.server, fingerprint, status};
+  }
+  /**
+   * Saves a confirmed preview and makes it active. A changed CA replaces the old one only with
+   * [replaceCa], and then the old session and queue go too: it is no longer the same identity.
+   */
+  async enrollServer(preview: Extract<ServerPreview, {ok: true}>, replaceCa = false) {
+    const {link, fingerprint} = preview;
+    const existing = this.state.servers.find(server => server.id === link.id);
+    if (existing && existing.fingerprint !== fingerprint && !replaceCa)
+      throw new Error('La identidad del servidor cambió; confirma antes de reemplazarla');
+    if (!existing && this.state.servers.length >= MAX_SERVERS) throw new Error(`Máximo ${MAX_SERVERS} servidores`);
+    if (existing && existing.fingerprint !== fingerprint) await this.forget(existing);
+    const entry: SavedServer = {
+      id: link.id,
+      name: link.name,
+      addresses: link.addresses,
+      lastAddress: existing?.lastAddress && link.addresses.includes(existing.lastAddress) ? existing.lastAddress : null,
+      caPem: link.caPem,
+      fingerprint,
+      scope: existing?.scope ?? JSON.stringify([link.id]),
+      addedAt: existing?.addedAt ?? this.now(),
+    };
+    const servers = existing
+      ? this.state.servers.map(server => (server.id === link.id ? entry : server))
+      : [...this.state.servers, entry];
+    if (link.id === this.state.activeServerId) {
+      await this.suspend();
+      await this.saveServers(servers, link.id);
+      await this.resumeStored();
+    } else {
+      await this.saveServers(servers);
+      await this.selectServer(link.id);
+    }
+  }
+  /** Deletes the session, queue and failure notes stored for [server]. */
+  private async forget(server: SavedServer) {
+    const saved = await this.deps.secure.getItem(sessionKey(server.id));
+    if (saved) await new Outbox(this.deps.storage, this.userScope(JSON.parse(saved), server)).discard();
+    await this.storeSession(null, server.id);
+  }
+  /** Removes [serverId] with its session and queue; another server becomes active if needed. */
+  async removeServer(serverId: string) {
+    const server = this.state.servers.find(item => item.id === serverId);
+    if (!server) return;
+    const wasActive = serverId === this.state.activeServerId;
+    if (wasActive) await this.suspend();
+    await this.forget(server);
+    const servers = this.state.servers.filter(item => item.id !== serverId);
+    await this.saveServers(servers, wasActive ? (servers[0]?.id ?? null) : this.state.activeServerId);
+    if (wasActive) await this.resumeStored();
+  }
+  /** Edits the address of the hand-configurable installation server (and makes it active). */
   async configure(server: Server) {
     const host = server.host
       .trim()
@@ -624,9 +894,16 @@ export class Engine {
       .toLowerCase();
     if (!host || /[\s/]/.test(host) || !Number.isInteger(server.port) || server.port < 1 || server.port > 65535)
       throw new Error('Indica una IP/host y puerto entre 1 y 65535');
-    if (host === this.state.server.host && server.port === this.state.server.port) return;
-    await this.logout();
-    await this.deps.storage.setItem('server', JSON.stringify({host, port: server.port}));
-    this.update({server: {host, port: server.port}});
+    const manual = this.state.servers.find(item => item.manual);
+    if (!manual) throw new Error('Este servidor se configura con su código QR');
+    const address = joinAddress(host, server.port);
+    if (manual.id === this.state.activeServerId && manual.addresses.length === 1 && manual.addresses[0] === address)
+      return;
+    if (manual.id === this.state.activeServerId) await this.logout();
+    else await this.forget(manual);
+    const servers = this.state.servers.map(item =>
+      item.id === manual.id ? {...item, addresses: [address], lastAddress: null} : item,
+    );
+    await this.saveServers(servers, manual.id);
   }
 }

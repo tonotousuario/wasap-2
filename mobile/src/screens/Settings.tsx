@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {Alert, Pressable, ScrollView, Text, View} from 'react-native';
 import {engine} from '../native';
+import {shortFingerprint} from '../enrollment';
 import {explainError, LINK_LABEL, linkState, momentLabel, pendingLabel} from '../format';
 import {run, useEngine, useNav} from '../ui/app';
 import {Avatar, Button, Icon, SectionTitle} from '../ui/kit';
@@ -24,6 +25,7 @@ const OPERATIONS: Record<string, string> = {
 
 export function Settings() {
   const state = useEngine();
+  const active = state.servers.find(server => server.id === state.activeServerId);
   const nav = useNav();
   const {c} = useTheme();
   const [diagnostics, setDiagnostics] = useState(false);
@@ -45,9 +47,11 @@ export function Settings() {
       ],
     );
   const facts: [string, string][] = [
-    ['Servidor', state.server.host],
-    ['Puerto', String(state.server.port)],
-    ['Cifrado', 'TLS con el certificado de instalación'],
+    ['Servidor', active?.name ?? '—'],
+    ['Identificador', active?.id ?? '—'],
+    ['Dirección', `${state.server.host} · puerto ${state.server.port}`],
+    ['Cifrado', 'TLS con la CA de este servidor'],
+    ['Huella de la CA', active?.fingerprint ? shortFingerprint(active.fingerprint) : '—'],
     ['Estado', LINK_LABEL[link]],
     ['Sesión válida hasta', momentLabel(session.expiresAt, now)],
     [
@@ -120,16 +124,17 @@ export function Settings() {
           <View style={{height: 1, backgroundColor: c.line, marginLeft: space.lg}} />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Servidor ${state.server.host}, puerto ${state.server.port}. Cambiar`}
+            accessibilityLabel={`Servidor ${active?.name ?? ''}, ${state.server.host}, puerto ${state.server.port}. Cambiar`}
             onPress={() => nav.push({name: 'server'})}
             android_ripple={{color: c.line}}
             style={{flexDirection: 'row', gap: space.md, padding: space.lg, alignItems: 'center', minHeight: 64}}
           >
             <Icon name="server" color={c.textSoft} />
             <View style={{flex: 1}}>
-              <Text style={[type.body, {color: c.text, fontWeight: '600'}]}>Servidor</Text>
+              <Text style={[type.body, {color: c.text, fontWeight: '600'}]}>{active?.name ?? 'Servidor'}</Text>
               <Text style={[type.small, {color: c.textSoft}]}>
                 {state.server.host} · puerto {state.server.port}
+                {state.servers.length > 1 ? ` · ${state.servers.length} servidores` : ''}
               </Text>
             </View>
             <Icon name="forward" size={20} color={c.textSoft} />

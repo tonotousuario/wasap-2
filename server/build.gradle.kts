@@ -16,6 +16,8 @@ dependencies {
     // X.509 issuance and encrypted PKCS#8 for the installation CA (TLS itself stays on JSSE).
     implementation("org.bouncycastle:bcpkix-jdk18on:1.87")
     implementation("org.bouncycastle:bcprov-jdk18on:1.87")
+    implementation("com.google.zxing:core:3.5.3")
+    testImplementation("com.google.zxing:javase:3.5.3")
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

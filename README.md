@@ -128,6 +128,18 @@ usando `certs/server.p12`. Los certificados duran un año. Cuando falten menos d
 días, el servidor escribe `WARNING: TLS certificate expires on …` al arrancar y una vez
 al día (`docker compose logs server`). Un certificado vencido impide arrancar.
 
+Para que los teléfonos añadan este servidor, muestra su código QR:
+
+```sh
+docker compose exec server /app/bin/wasap-server certs qr
+docker compose exec server /app/bin/wasap-server certs qr --address 192.168.1.50 --png /var/lib/wasap/tls/qr.png
+```
+
+El QR lleva el identificador y el nombre del servidor, sus direcciones y el certificado
+público de la CA (nunca claves). Es denso: escanéalo desde la pantalla o imprímelo a
+8 cm o más. La consola también imprime el enlace `wasap://server?…` para compartirlo
+como texto. Ver [añadir servidores con su código QR](mobile/README.md#añadir-servidores-con-su-código-qr).
+
 `scripts/create-certs.sh` sigue disponible para crear la CA inicial sin el servidor.
 No incluyas `certs/` ni `.env` en Git.
 
@@ -169,8 +181,9 @@ Consulta [la guía móvil](mobile/README.md). El mismo proyecto permite compilac
 en EAS y compilaciones locales en macOS con Xcode. Android puede compilarse localmente
 con su SDK. Se utiliza una compilación nativa propia; Expo Go no incorpora el módulo TCP.
 
-Configura IP y puerto desde la app, inicia sesión con matrícula/PIN y registra tu
-asistencia. Cada usuario consulta solo su historial. El creador de un grupo administra
+Añade el servidor escaneando su código QR (o configura a mano el servidor de
+instalación), inicia sesión con matrícula/PIN y registra tu asistencia. La app guarda
+hasta 10 servidores, cada uno con su sesión. Cada usuario consulta solo su historial. El creador de un grupo administra
 sus integrantes; al retirar a alguien pierde acceso a futuras consultas y entregas.
 Los grupos admiten hasta 100 miembros. Los mensajes son de texto, hasta 4000 caracteres.
 
@@ -180,7 +193,7 @@ guardados en el teléfono (hasta 20) y se envían en orden; si el servidor recha
 de forma definitiva, se marca como no enviado y puedes copiarlo o descartarlo.
 Conserva las operaciones ya enviadas que aún no tengan confirmación y las reconcilia
 con el mismo identificador. Cambiar de servidor
-o cerrar sesión no traslada pendientes a otra identidad. Las sesiones caducan a las
+conserva lo pendiente de cada uno; cerrar sesión no traslada pendientes a otra identidad. Las sesiones caducan a las
 24 horas y sobreviven a los reinicios del servidor. No hay notificaciones push ni panel web en v1.
 
 ## Desarrollo y pruebas
