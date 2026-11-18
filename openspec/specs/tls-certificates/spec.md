@@ -58,15 +58,15 @@ La app MUST NOT presentar certificados ni claves de cliente; la configuración n
 - **THEN** la conexión falla con un error de seguridad
 
 ### Requirement: Generación de certificados
-El script de certificados SHALL crear la CA solo si no existe, generar un certificado de servidor de 1 año con SAN para la IP indicada y `127.0.0.1`, y empaquetarlo en un keystore PKCS12 protegido con una contraseña aleatoria. Si existe `ca.crt` sin `ca.key`, MUST fallar.
+El servidor SHALL emitir con `wasap-server certs issue` (y desde el panel) un certificado de servidor de 1 año firmado por la CA de instalación, con SAN para cada dirección indicada (IPs y nombres) más `127.0.0.1`, guardado en un keystore PKCS12 con contraseña aleatoria. El script `scripts/create-certs.sh` sigue disponible; si existe `ca.crt` sin su clave, MUST fallar.
 
 #### Scenario: Cambio de IP
-- **WHEN** se ejecuta de nuevo con otra IP y la CA existente
-- **THEN** se emite un certificado de servidor nuevo firmado por la misma CA y la app no necesita recompilarse
+- **WHEN** se emite un certificado nuevo con otra IP usando la CA existente
+- **THEN** el certificado nuevo está firmado por la misma CA y la app no necesita recompilarse ni volver a escanear
 
 #### Scenario: CA sin clave
-- **WHEN** existe `ca.crt` pero no `ca.key`
-- **THEN** el script termina con error sin generar archivos
+- **WHEN** existe `ca.crt` pero no su clave privada (ni cifrada ni en claro)
+- **THEN** la emisión termina con error sin generar archivos
 
 ### Requirement: Aviso de vencimiento próximo
 El servidor SHALL registrar un aviso en su salida de error al arrancar y al menos una vez cada 24 horas mientras algún certificado de la cadena venza en menos de 30 días, indicando la fecha de vencimiento.
@@ -78,3 +78,28 @@ El servidor SHALL registrar un aviso en su salida de error al arrancar y al meno
 #### Scenario: Vence en 200 días
 - **WHEN** el certificado vence en más de 30 días
 - **THEN** no se registra aviso
+
+### Requirement: CA cifrada en el servidor
+La clave privada de la CA SHALL guardarse en el servidor solo cifrada con una frase del administrador (PKCS#8 cifrado, derivación de clave fuerte); MUST NOT escribirse en claro en disco ni en la base, y firmar SHALL exigir la frase.
+
+#### Scenario: Importar la CA existente
+- **WHEN** el administrador ejecuta `wasap-server certs import` con `ca.key` y una frase
+- **THEN** el servidor guarda la clave cifrada y sugiere borrar `ca.key` en claro
+
+#### Scenario: Frase incorrecta
+- **WHEN** se intenta emitir un certificado con una frase incorrecta
+- **THEN** la emisión falla sin generar archivos ni revelar si la clave existe
+
+### Requirement: Certificado con varias direcciones
+El servidor SHALL detectar sus direcciones de red (excepto bucle local) y proponerlas para el SAN; el administrador SHALL poder añadir nombres DNS y quitar direcciones antes de emitir.
+
+#### Scenario: Servidor en dos redes
+- **WHEN** el servidor tiene las IPs `192.168.1.50` y `10.8.0.1` y se emite con las propuestas
+- **THEN** un cliente se conecta con validación correcta por cualquiera de las dos
+
+### Requirement: Recarga del certificado sin reiniciar
+Un certificado recién emitido SHALL usarse en las conexiones nuevas sin reiniciar el servidor; las conexiones abiertas MUST conservar su sesión TLS.
+
+#### Scenario: Emisión en caliente
+- **WHEN** se emite un certificado nuevo con el servidor atendiendo clientes
+- **THEN** los clientes conectados siguen funcionando y una conexión nueva recibe el certificado nuevo
