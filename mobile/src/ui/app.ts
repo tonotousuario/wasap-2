@@ -8,6 +8,7 @@ export type Route =
   | {name: 'members'; id: string}
   | {name: 'newChat'}
   | {name: 'newGroup'}
+  | {name: 'classReport'; id: string}
   | {name: 'server'};
 export type Navigation = {
   push(route: Route): void;

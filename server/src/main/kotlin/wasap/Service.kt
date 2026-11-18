@@ -13,8 +13,8 @@ data class ServerIdentity(val id: String, val name: String)
 class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
     private val mutations = setOf("attendance.mark", "conversations.direct", "groups.create", "groups.add", "groups.remove", "messages.send")
     private val userColumns = "id::text, matricula, name"
-    private val eventColumns = "id::text, seq::text, type, recorded_at AS \"recordedAt\""
-    private val conversationColumns = "c.id::text, c.kind, c.name, c.owner_id::text AS \"ownerId\", c.last_seq::text AS \"lastSeq\""
+    private val eventColumns = "id::text, seq::text, type, recorded_at AS \"recordedAt\", class_id::text AS \"classId\""
+    private val conversationColumns = "c.id::text, c.kind, c.name, c.owner_id::text AS \"ownerId\", c.last_seq::text AS \"lastSeq\", c.is_class AS \"isClass\""
     private val messageColumns = "m.id::text, m.conversation_id::text AS \"conversationId\", m.seq::text, m.sender_id::text AS \"senderId\", u.name AS \"senderName\", m.text, m.created_at AS \"createdAt\""
 
     private fun matricula(value: String): String = value.trim().uppercase(Locale.ROOT).also {
@@ -56,10 +56,10 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
     // Use an independently salted dummy hash to perform comparable work for unknown accounts.
     private val dummyHash by lazy { Pins.hash("000000") }
     fun authenticate(matricula: String, pin: String): User {
-        val row = db.transaction { it.rows("SELECT $userColumns, pin_hash, credential_version FROM users WHERE matricula=?", this.matricula(matricula)).firstOrNull() }
+        val row = db.transaction { it.rows("SELECT $userColumns, role, pin_hash, credential_version FROM users WHERE matricula=?", this.matricula(matricula)).firstOrNull() }
         val valid = Pins.verify(pin, row?.string("pin_hash") ?: dummyHash)
         if (row == null || !valid) throw ApiError("INVALID_CREDENTIALS", "Matrícula o PIN incorrectos")
-        return row.toUser().also { it.credentialVersion = row["credential_version"]!!.jsonPrimitive.int }
+        return row.toUser().copy(role = row.string("role")).also { it.credentialVersion = row["credential_version"]!!.jsonPrimitive.int }
     }
 
     fun call(userId: String, operation: String, payload: JsonObject, requestId: String): JsonObject = db.transaction { c ->
@@ -127,10 +127,54 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
     } catch (_: ApiError) {
         false
     }
-    private fun lastEvent(c: Connection, uid: String) = c.rows("SELECT $eventColumns FROM attendance_events WHERE user_id=?::uuid ORDER BY seq DESC LIMIT 1", uid).firstOrNull()
+
+    /** Last movement of [uid] in [classId], or at the general door when it is null. */
+    private fun lastEvent(c: Connection, uid: String, classId: String?) = c.rows(
+        "SELECT $eventColumns FROM attendance_events WHERE user_id=?::uuid AND class_id IS NOT DISTINCT FROM ?::uuid ORDER BY seq DESC LIMIT 1",
+        uid,
+        classId,
+    ).firstOrNull()
+
+    /** The optional classId of an attendance payload, checked to be a class [uid] belongs to. */
+    private fun attendanceClass(c: Connection, uid: String, p: JsonObject): String? {
+        val classId = p.optional("classId")?.let(::uuid) ?: return null
+        val row = conversation(c, uid, classId) // NOT_FOUND / FORBIDDEN for non-members
+        if (row["isClass"]?.jsonPrimitive?.booleanOrNull != true) invalid("La conversación no es una clase")
+        return classId
+    }
     private fun nextType(event: JsonObject?) = if (event?.string("type") == "ENTRY") "EXIT" else "ENTRY"
 
     private fun perform(c: Connection, uid: String, operation: String, p: JsonObject): JsonObject = when (operation) {
+        "attendance.classReport" -> {
+            val classId = p.uuid("classId")
+            val row = c.rows("SELECT owner_id::text AS \"ownerId\", is_class AS \"isClass\" FROM conversations WHERE id=?::uuid", classId).firstOrNull()
+                ?: throw ApiError("NOT_FOUND", "Clase no encontrada")
+            if (row["isClass"]?.jsonPrimitive?.booleanOrNull != true) throw ApiError("NOT_FOUND", "Clase no encontrada")
+            if (row.optional("ownerId") != uid && role(c, uid) != "admin") throw ApiError("FORBIDDEN", "Solo el responsable de la clase consulta su lista")
+            attendance(c, null, p, AttendanceScope(classId), withOwner = true)
+        }
+
+        "classes.list" -> obj(
+            "classes" to c.rows(
+                """
+                SELECT $conversationColumns, (c.owner_id = ?::uuid) AS "isOwner" FROM conversations c
+                JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ?::uuid
+                WHERE c.is_class ORDER BY c.name, c.id
+                """,
+                uid,
+                uid,
+            ),
+        )
+
+        "users.setRole" -> {
+            requireRole(c, uid, "admin")
+            val role = p.string("role")
+            if (role !in setOf("admin", "teacher", "student")) invalid("El rol debe ser admin, teacher o student")
+            val user = c.rows("UPDATE users SET role=? WHERE matricula=? RETURNING $userColumns, role", role, matricula(p.string("matricula"))).firstOrNull()
+                ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
+            obj("user" to user)
+        }
+
         "users.list" -> {
             // Search only: never the whole directory. Counted in code points after trimming.
             val raw = p.optional("query")?.trim() ?: ""
@@ -140,18 +184,28 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             obj("users" to c.rows("SELECT $userColumns FROM users WHERE strpos(lower(matricula), lower(?))>0 OR strpos(lower(name), lower(?))>0 ORDER BY matricula LIMIT 100", q, q))
         }
 
-        "attendance.state" -> lastEvent(c, uid).let { obj("lastEvent" to it, "nextType" to nextType(it), "timezone" to zone.id, "today" to LocalDate.now(zone).toString()) }
+        "attendance.state" -> {
+            val classId = attendanceClass(c, uid, p)
+            lastEvent(c, uid, classId).let { obj("lastEvent" to it, "nextType" to nextType(it), "classId" to classId, "timezone" to zone.id, "today" to LocalDate.now(zone).toString()) }
+        }
 
         "attendance.mark" -> {
             if (!p.containsKey("expectedLastEventId")) invalid("Se requiere expectedLastEventId")
-            val previous = lastEvent(c, uid)
+            val classId = attendanceClass(c, uid, p)
+            val previous = lastEvent(c, uid, classId)
             val expected = p.optional("expectedLastEventId")?.let(::uuid)
             if (previous?.string("id") != expected) throw ApiError("CONFLICT", "El último movimiento cambió; actualiza antes de registrar")
-            val event = c.rows("INSERT INTO attendance_events(id,user_id,type) VALUES (?::uuid,?::uuid,?) RETURNING $eventColumns", UUID.randomUUID().toString(), uid, nextType(previous)).single()
-            obj("event" to event, "nextType" to nextType(event))
+            val event = c.rows(
+                "INSERT INTO attendance_events(id,user_id,type,class_id) VALUES (?::uuid,?::uuid,?,?::uuid) RETURNING $eventColumns",
+                UUID.randomUUID().toString(),
+                uid,
+                nextType(previous),
+                classId,
+            ).single()
+            obj("event" to event, "nextType" to nextType(event), "classId" to classId)
         }
 
-        "attendance.list" -> attendance(c, uid, p)
+        "attendance.list" -> attendance(c, uid, p, AttendanceScope(attendanceClass(c, uid, p)))
 
         "conversations.list" -> {
             val after = p.optional("after")?.let(::uuid)
@@ -193,13 +247,16 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         }
 
         "groups.create" -> {
-            val name = text(p.string("name"), 80, "Nombre del grupo")
+            // A class is a group with its own attendance; only teachers and admins create them.
+            val isClass = p["class"]?.let { (it as? JsonPrimitive)?.takeUnless { v -> v.isString }?.booleanOrNull ?: invalid("class debe ser booleano") } ?: false
+            if (isClass) requireRole(c, uid, "teacher", "admin")
+            val name = text(p.string("name"), 80, if (isClass) "Nombre de la clase" else "Nombre del grupo")
             val members = p["matriculas"] as? JsonArray ?: invalid("matriculas debe ser una lista")
             if (members.size > 100) invalid("Máximo 100 integrantes por solicitud")
             val ids = members.map { user(c, (it as? JsonPrimitive)?.takeIf { v -> v.isString }?.content ?: invalid("Matrícula inválida")).string("id") }.toSet() + uid
             if (ids.size > 100) invalid("Máximo 100 integrantes por grupo")
             val cid = UUID.randomUUID().toString()
-            c.exec("INSERT INTO conversations(id,kind,name,owner_id) VALUES (?::uuid,'GROUP',?,?::uuid)", cid, name, uid)
+            c.exec("INSERT INTO conversations(id,kind,name,owner_id,is_class) VALUES (?::uuid,'GROUP',?,?::uuid,?)", cid, name, uid, isClass)
             ids.forEach { c.exec("INSERT INTO conversation_members(conversation_id,user_id) VALUES (?::uuid,?::uuid)", cid, it) }
             obj("conversation" to conversation(c, uid, cid))
         }
@@ -277,7 +334,11 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             invalid("Fecha inválida; usa YYYY-MM-DD")
         }
     }
-    private fun attendance(c: Connection, uid: String?, p: JsonObject): JsonObject {
+
+    /** Which movements a query covers: one class, the general door (null), or every class ([all]). */
+    private data class AttendanceScope(val classId: String?, val all: Boolean = false)
+
+    private fun attendance(c: Connection, uid: String?, p: JsonObject, scope: AttendanceScope, withOwner: Boolean = false): JsonObject {
         val before = p.cursor("before")
         val from = date(p.optional("from"))
         val to = date(p.optional("to"))
@@ -287,25 +348,54 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         val limit = p.limit()
         val items = c.rows(
             """
-            SELECT $eventColumns FROM attendance_events WHERE (?::uuid IS NULL OR user_id=?::uuid)
-            AND (?::bigint IS NULL OR seq<?::bigint)
-            AND (?::timestamptz IS NULL OR recorded_at>=?::timestamptz) AND (?::timestamptz IS NULL OR recorded_at<?::timestamptz)
-            ORDER BY seq DESC LIMIT ?
+            SELECT a.id::text, a.seq::text, a.type, a.recorded_at AS "recordedAt", a.class_id::text AS "classId"
+                ${if (withOwner) ", u.matricula, u.name, k.name AS \"className\"" else ""}
+            FROM attendance_events a JOIN users u ON u.id = a.user_id LEFT JOIN conversations k ON k.id = a.class_id
+            WHERE (?::uuid IS NULL OR a.user_id=?::uuid)
+            AND (? OR a.class_id IS NOT DISTINCT FROM ?::uuid)
+            AND (?::bigint IS NULL OR a.seq<?::bigint)
+            AND (?::timestamptz IS NULL OR a.recorded_at>=?::timestamptz) AND (?::timestamptz IS NULL OR a.recorded_at<?::timestamptz)
+            ORDER BY a.seq DESC LIMIT ?
         """,
-            uid, uid, before, before, start, start, end, end, limit + 1,
+            uid, uid, scope.all, scope.classId, before, before, start, start, end, end, limit + 1,
         )
         val page = items.take(limit)
         return obj("events" to page, "nextCursor" to if (items.size > limit) page.last().string("seq") else null)
     }
     fun adminAttendance(matricula: String?, payload: JsonObject): JsonObject = db.transaction { c ->
         val uid = matricula?.let { user(c, it).string("id") }
-        val result = attendance(c, uid, payload)
-        val events = result["events"]!!.jsonArray.map { entry ->
-            val event = entry.jsonObject
-            val owner = c.rows("SELECT u.matricula,u.name FROM users u JOIN attendance_events a ON a.user_id=u.id WHERE a.id=?::uuid", event.string("id")).single()
-            JsonObject(event + owner)
-        }
-        JsonObject(result + ("events" to JsonArray(events)))
+        val classId = payload.optional("classId")?.let(::uuid)
+        attendance(c, uid, payload, AttendanceScope(classId, all = classId == null), withOwner = true)
+    }
+
+    /**
+     * Every movement matching [payload] (all pages) as CSV: matrícula, nombre, clase, tipo and
+     * local time in the server's zone. The general door shows as «General».
+     */
+    fun attendanceCsv(matricula: String?, payload: JsonObject): String = buildString {
+        append("matricula,nombre,clase,tipo,instante_local\n")
+        val local = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(zone)
+        var cursor: String? = payload.optional("before")
+        do {
+            val page = adminAttendance(matricula, JsonObject(payload + ("before" to json(cursor)) + ("limit" to json(100))))
+            page["events"]!!.jsonArray.map { it.jsonObject }.forEach { e ->
+                val cells = listOf(
+                    e.string("matricula"),
+                    e.string("name"),
+                    e.optional("className") ?: "General",
+                    if (e.string("type") == "ENTRY") "Entrada" else "Salida",
+                    local.format(java.time.Instant.parse(e.string("recordedAt"))),
+                )
+                append(cells.joinToString(",") { csvCell(it) }).append('\n')
+            }
+            cursor = page.optional("nextCursor")
+        } while (cursor != null)
+    }
+
+    private fun csvCell(value: String): String {
+        // Quote when needed, and neutralise formulas for spreadsheet programs.
+        val safe = if (value.firstOrNull() in setOf('=', '+', '-', '@')) "'$value" else value
+        return if (safe.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + safe.replace("\"", "\"\"") + "\"" else safe
     }
 
     /** Deletes processed requests older than [retentionDays], in batches to keep locks short. */
@@ -327,6 +417,23 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         }
     }
     fun users(): List<JsonObject> = db.transaction { it.rows("SELECT $userColumns FROM users ORDER BY matricula") }
+
+    /** Current role of [uid], read inside the caller's transaction so a role change applies at once. */
+    private fun role(c: Connection, uid: String): String = c.rows("SELECT role FROM users WHERE id=?::uuid", uid).firstOrNull()?.string("role")
+        ?: throw ApiError("UNAUTHENTICATED", "Usuario no encontrado")
+
+    private fun requireRole(c: Connection, uid: String, vararg allowed: String) {
+        if (role(c, uid) !in allowed) throw ApiError("FORBIDDEN", "Tu rol no permite esta acción")
+    }
+
+    fun setRole(matricula: String, role: String): User {
+        if (role !in setOf("admin", "teacher", "student")) invalid("El rol debe ser admin, teacher o student")
+        return db.transaction { c ->
+            c.rows("UPDATE users SET role=? WHERE matricula=? RETURNING $userColumns, role", role, this.matricula(matricula)).firstOrNull()
+                ?.let { it.toUser().copy(role = it.string("role")) }
+                ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
+        }
+    }
 
     @Volatile private var identityCache: ServerIdentity? = null
 

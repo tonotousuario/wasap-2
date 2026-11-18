@@ -141,6 +141,12 @@ fun main(args: Array<String>) {
 
                     listOf("users", "list") -> println(json(service.users()))
 
+                    listOf("users", "role") -> {
+                        require(args.size == 5) { "admin users role MATRICULA admin|teacher|student" }
+                        val user = service.setRole(args[3], args[4])
+                        println("${user.matricula} (${user.name}) ahora es ${user.role}")
+                    }
+
                     listOf("server", "name") -> {
                         require(args.size == 4) { "admin server name 'Nombre del servidor'" }
                         val identity = service.renameServer(args[3])
@@ -150,9 +156,16 @@ fun main(args: Array<String>) {
                     listOf("server", "show") -> service.serverIdentity().let { println("Servidor ${it.id}: ${it.name}") }
 
                     else -> {
-                        require(args.getOrNull(1) == "attendance" && args.size in 3..6) { "admin attendance MATRICULA|* [DESDE YYYY-MM-DD] [HASTA YYYY-MM-DD] [CURSOR]" }
-                        val p = obj("from" to args.getOrNull(3), "to" to args.getOrNull(4), "before" to args.getOrNull(5), "limit" to 100)
-                        println(service.adminAttendance(args[2].takeUnless { it == "*" }, p))
+                        val usage = "admin attendance MATRICULA|* [DESDE YYYY-MM-DD] [HASTA YYYY-MM-DD] [CURSOR] [--class ID] [--csv]"
+                        require(args.getOrNull(1) == "attendance") { usage }
+                        val rest = args.drop(2)
+                        val classId = options(rest, "--class").lastOrNull()
+                        val csv = "--csv" in rest
+                        val positional = rest.filterIndexed { i, value -> value != "--csv" && value != "--class" && rest.getOrNull(i - 1) != "--class" }
+                        require(positional.size in 1..4) { usage }
+                        val p = obj("from" to positional.getOrNull(1), "to" to positional.getOrNull(2), "before" to positional.getOrNull(3), "limit" to 100, "classId" to classId)
+                        val who = positional[0].takeUnless { it == "*" }
+                        if (csv) print(service.attendanceCsv(who, p)) else println(service.adminAttendance(who, p))
                     }
                 }
             } else {

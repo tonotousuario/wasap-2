@@ -232,7 +232,7 @@ class TcpServer(
 
                 type == "attendance.mark" -> {
                     eventType = "attendance.changed"
-                    data = service.call(session?.user?.id ?: return, "attendance.state", obj(), UUID.randomUUID().toString())
+                    data = service.call(session?.user?.id ?: return, "attendance.state", JsonObject(payload.filterKeys { it == "classId" }), UUID.randomUUID().toString())
                 }
 
                 type == "conversations.direct" || (type.startsWith("groups.") && type != "groups.members") -> {

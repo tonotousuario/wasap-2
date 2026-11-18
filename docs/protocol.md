@@ -52,12 +52,15 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | auth.resume | `{token}` | `{token,expiresAt,user:{id,matricula,name}}` |
 | auth.logout | `{}` | `{}` |
 | users.list | `{query:string}` (≥3 characters after trimming) | `{users:[{id,matricula,name}]}` (max 100) |
-| attendance.state | `{}` | `{lastEvent:Event|null,nextType:"ENTRY"|"EXIT",timezone?:string,today?:"YYYY-MM-DD"}` |
-| attendance.mark | `{expectedLastEventId:UUID|null}` | `{event:Event,nextType}` |
-| attendance.list | `{before?:string,limit?:number,from?:"YYYY-MM-DD",to?:"YYYY-MM-DD"}` | `{events:[Event],nextCursor:string|null}` |
+| attendance.state | `{classId?:UUID}` | `{lastEvent:Event|null,nextType:"ENTRY"|"EXIT",classId:UUID|null,timezone?:string,today?:"YYYY-MM-DD"}` |
+| attendance.mark | `{expectedLastEventId:UUID|null,classId?:UUID}` | `{event:Event,nextType,classId:UUID|null}` |
+| attendance.list | `{classId?:UUID,before?:string,limit?:number,from?:"YYYY-MM-DD",to?:"YYYY-MM-DD"}` | `{events:[Event],nextCursor:string|null}` |
+| attendance.classReport | `{classId,from?,to?,before?,limit?}` | `{events:[Event+{matricula,name,className}],nextCursor}` (class owner or admin) |
+| classes.list | `{}` | `{classes:[Conversation+{isOwner:boolean}]}` |
+| users.setRole | `{matricula,role:"admin"|"teacher"|"student"}` | `{user:{id,matricula,name,role}}` (admin only) |
 | conversations.list | `{after?:UUID,limit?:number}` | `{conversations:[Conversation],nextCursor:UUID|null}` (id ASC) |
 | conversations.direct | `{matricula}` | `{conversation:Conversation}` |
-| groups.create | `{name,matriculas:string[]}` | `{conversation:Conversation}` |
+| groups.create | `{name,matriculas:string[],class?:boolean}` | `{conversation:Conversation}` (`class:true` needs teacher or admin) |
 | groups.members | `{conversationId}` | `{members:[{id,matricula,name}]}` |
 | groups.add | `{conversationId,matricula}` | `{}` |
 | groups.remove | `{conversationId,matricula}` | `{}` |
@@ -68,8 +71,25 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 least 3 Unicode characters (code points) after trimming, otherwise VALIDATION. It
 matches matrícula or name case-insensitively and returns only `id`, `matricula` and
 `name` of at most 100 users ordered by matrícula.
-`Event={id,seq,type:"ENTRY"|"EXIT",recordedAt}`.
-`Conversation={id,kind:"GENERAL"|"DIRECT"|"GROUP",name,ownerId:UUID|null,lastSeq:string,peer?:{id,matricula,name}}`.
+`Event={id,seq,type:"ENTRY"|"EXIT",recordedAt,classId:UUID|null}`.
+`Conversation={id,kind:"GENERAL"|"DIRECT"|"GROUP",name,ownerId:UUID|null,lastSeq:string,isClass:boolean,peer?:{id,matricula,name}}`.
+
+### Roles and classes
+
+Every user has one role: `student` (default), `teacher` or `admin`; it is returned in
+`user.role` by `auth.login`/`auth.resume`, never in the directory, and only an admin
+changes it (`users.setRole` or `admin users role`). Permission checks read the role
+from the database inside the request's transaction, so a change applies immediately.
+
+A class is a GROUP with `isClass:true`, created by a teacher or admin who becomes its
+owner; membership rules are the group rules. Attendance takes an optional `classId`:
+with it, the alternating state, `expectedLastEventId` and history apply to that
+class only, and only its members may use it (FORBIDDEN otherwise, VALIDATION for a
+group that is not a class). Without `classId` attendance is the general door, exactly
+as in v1. Removing a student keeps their past movements in the class.
+`attendance.changed` carries the `classId` of the movement (null for the door).
+`attendance.classReport` lists every member's movements in a class, newest first,
+for its owner or an admin.
 `peer` identifies the other member of a DIRECT conversation from the requesting
 user's perspective; it is absent for GENERAL and GROUP. It is returned by
 `conversations.list` and `conversations.direct`. Older stored mutation replies may

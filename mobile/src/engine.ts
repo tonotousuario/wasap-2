@@ -9,6 +9,8 @@ import type {
   Conversation,
   Operation,
   FailedMessage,
+  ClassInfo,
+  ReportEvent,
 } from './types.ts';
 import {ConnectError, errorCode, errorDetail} from './errors.ts';
 import {presetRange, type RangePreset} from './format.ts';
@@ -41,6 +43,10 @@ export type AppState = {
   events: AttendanceEvent[];
   attendanceCursor: string | null;
   attendanceFilters: AttendanceFilters;
+  /** Classes the user belongs to; empty on servers without classes. */
+  classes: ClassInfo[];
+  /** Class whose attendance is shown and marked; null = the general door. */
+  attendanceClassId: string | null;
   conversations: Conversation[];
   messages: Record<string, Message[]>;
   older: Record<string, string | null>;
@@ -63,6 +69,8 @@ export class Engine {
     events: [],
     attendanceCursor: null,
     attendanceFilters: {},
+    classes: [],
+    attendanceClassId: null,
     conversations: [],
     messages: {},
     older: {},
@@ -151,7 +159,16 @@ export class Engine {
     if (this.state.session && this.state.session.user.id !== session.user.id) {
       await this.journal?.discard();
       this.recovered = {};
-      this.update({messages: {}, conversations: [], events: [], attendance: null, older: {}, failed: {}});
+      this.update({
+        messages: {},
+        conversations: [],
+        events: [],
+        attendance: null,
+        older: {},
+        failed: {},
+        classes: [],
+        attendanceClassId: null,
+      });
     }
     this.journal = new Outbox(this.deps.storage, this.userScope(session));
     await this.deps.secure.setItem('wasap.session', JSON.stringify({server: this.serverScope(), session}));
@@ -256,7 +273,10 @@ export class Engine {
   }
   async markAttendance() {
     if (!this.state.attendance) throw new Error('Actualiza el estado de asistencia');
-    return this.mutate('attendance.mark', {expectedLastEventId: this.state.attendance.lastEvent?.id ?? null});
+    return this.mutate('attendance.mark', {
+      expectedLastEventId: this.state.attendance.lastEvent?.id ?? null,
+      ...this.classPayload(),
+    });
   }
   async mutate(type: string, payload: Record<string, unknown>): Promise<any> {
     // Messages go through the queue; awaiting here still means "until the server confirms".
@@ -374,18 +394,59 @@ export class Engine {
     this.update({failed});
   }
   async refresh() {
+    await this.refreshClasses();
     await this.refreshAttendance();
     await this.loadAttendance(false);
     await this.refreshConversations();
   }
+  /** `{classId}` for the selected class, nothing for the general door. */
+  private classPayload(): Record<string, unknown> {
+    return this.state.attendanceClassId ? {classId: this.state.attendanceClassId} : {};
+  }
+  async refreshClasses() {
+    let classes: ClassInfo[] = [];
+    try {
+      classes = (await this.query('classes.list')).classes;
+    } catch (error) {
+      // Servers without classes answer VALIDATION (unknown operation): no classes there.
+      if (!(error instanceof ProtocolError && error.code === 'VALIDATION')) throw error;
+    }
+    const selected = this.state.attendanceClassId;
+    if (selected && !classes.some(c => c.id === selected)) {
+      // Removed from the selected class: back to the general door.
+      ++this.attendanceHistoryGeneration;
+      this.update({classes, attendanceClassId: null, attendance: null, events: [], attendanceCursor: null});
+    } else this.update({classes});
+  }
+  /** Shows and marks attendance for [classId] (null = the general door). */
+  async selectAttendanceClass(classId: string | null) {
+    if (classId === this.state.attendanceClassId) return;
+    ++this.attendanceHistoryGeneration;
+    this.update({attendanceClassId: classId, attendance: null, events: [], attendanceCursor: null});
+    await this.refreshAttendance();
+    await this.loadAttendance(false);
+  }
+  async createClass(name: string, matriculas: string[]) {
+    return this.mutate('groups.create', {name, matriculas, class: true});
+  }
+  /** One page of a class report (owner or admin), newest first. */
+  async classReport(
+    classId: string,
+    filters: AttendanceFilters,
+    before?: string | null,
+  ): Promise<{events: ReportEvent[]; nextCursor: string | null}> {
+    return this.query('attendance.classReport', {classId, limit: 50, ...filters, ...(before ? {before} : {})});
+  }
   private applyAttendance(attendance: AttendanceState) {
+    // Only the selected class (or the door) updates the hero.
+    if ((attendance.classId ?? null) !== this.state.attendanceClassId) return;
     const current = this.state.attendance?.lastEvent,
       next = attendance.lastEvent;
     if (current && (!next || compareSeq(next.seq, current.seq) < 0)) return;
     this.update({attendance});
   }
   async refreshAttendance() {
-    const attendance = await this.query('attendance.state');
+    const attendance = await this.query('attendance.state', this.classPayload());
     this.applyAttendance(attendance);
   }
   async loadAttendancePreset(preset: RangePreset) {
@@ -401,7 +462,7 @@ export class Engine {
     }
     if (older && !this.state.attendanceCursor) return;
     const historyGeneration = this.attendanceHistoryGeneration;
-    const payload: Record<string, unknown> = {limit: 50, ...this.state.attendanceFilters};
+    const payload: Record<string, unknown> = {limit: 50, ...this.state.attendanceFilters, ...this.classPayload()};
     if (older && this.state.attendanceCursor) payload.before = this.state.attendanceCursor;
     const page = await this.query('attendance.list', payload);
     if (historyGeneration !== this.attendanceHistoryGeneration) return;
@@ -503,10 +564,14 @@ export class Engine {
       if (this.state.conversations.some(c => c.id === message.conversationId))
         this.addMessages(message.conversationId, [message]);
     } else if (event.type === 'attendance.changed') {
-      this.applyAttendance(event.payload as AttendanceState);
+      const changed = event.payload as AttendanceState;
+      if ((changed.classId ?? null) !== this.state.attendanceClassId) return;
+      this.applyAttendance(changed);
       void this.loadAttendance().catch(error => this.report(error));
-    } else if (event.type === 'conversations.changed')
+    } else if (event.type === 'conversations.changed') {
       void this.refreshConversations().catch(error => this.report(error));
+      void this.refreshClasses().catch(error => this.report(error));
+    }
   }
   async logout() {
     const connection = this.connection;
@@ -547,6 +612,8 @@ export class Engine {
       attendance: null,
       attendanceCursor: null,
       attendanceFilters: {},
+      classes: [],
+      attendanceClassId: null,
       older: {},
     });
   }

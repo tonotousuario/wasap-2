@@ -133,7 +133,11 @@ export function Thread({id}: {id: string}) {
     <View style={{flex: 1, backgroundColor: c.chatBg}}>
       <TopBar
         title={title}
-        subtitle={conversation.kind === 'GROUP' ? 'Grupo · toca para ver integrantes' : kindLabel(conversation.kind)}
+        subtitle={
+          conversation.kind === 'GROUP'
+            ? `${conversation.isClass ? 'Clase' : 'Grupo'} · toca para ver integrantes`
+            : kindLabel(conversation.kind)
+        }
         onBack={nav.pop}
         left={<Avatar name={title} kind={conversation.kind} size={38} />}
         onTitlePress={conversation.kind === 'GROUP' ? () => nav.push({name: 'members', id}) : undefined}

@@ -18,8 +18,11 @@ interface SessionStore {
     /** The session if it exists, has not expired and its credential version is current. */
     fun find(hash: String): StoredSession?
 
-    /** Whether the session still exists, has not expired and [credentialVersion] is current. */
-    fun isValid(hash: String, credentialVersion: Int): Boolean
+    /**
+     * The user's current role when the session still exists, has not expired and
+     * [credentialVersion] is current; null otherwise.
+     */
+    fun currentRole(hash: String, credentialVersion: Int): String?
     fun delete(hash: String)
     fun purgeExpired(): Int
 }
@@ -48,26 +51,26 @@ class DatabaseSessionStore(private val db: Database) : SessionStore {
     override fun find(hash: String): StoredSession? = db.transaction { c ->
         c.rows(
             """
-            SELECT u.id::text AS id, u.matricula, u.name, s.credential_version AS version, s.expires_at AS "expiresAt"
+            SELECT u.id::text AS id, u.matricula, u.name, u.role, s.credential_version AS version, s.expires_at AS "expiresAt"
             FROM sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = decode(?,'hex') AND s.expires_at > now() AND s.credential_version = u.credential_version
         """,
             hash,
         ).firstOrNull()?.let { row ->
-            StoredSession(User(row.string("id"), row.string("matricula"), row.string("name")), row["version"]!!.jsonPrimitive.int, Instant.parse(row.string("expiresAt")))
+            StoredSession(User(row.string("id"), row.string("matricula"), row.string("name"), row.string("role")), row["version"]!!.jsonPrimitive.int, Instant.parse(row.string("expiresAt")))
         }
     }
 
-    override fun isValid(hash: String, credentialVersion: Int): Boolean = db.transaction { c ->
+    override fun currentRole(hash: String, credentialVersion: Int): String? = db.transaction { c ->
         c.rows(
             """
-            SELECT 1 AS ok FROM sessions s JOIN users u ON u.id = s.user_id
+            SELECT u.role FROM sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = decode(?,'hex') AND s.expires_at > now()
               AND s.credential_version = ? AND u.credential_version = s.credential_version
         """,
             hash,
             credentialVersion,
-        ).isNotEmpty()
+        ).firstOrNull()?.string("role")
     }
 
     override fun delete(hash: String) {

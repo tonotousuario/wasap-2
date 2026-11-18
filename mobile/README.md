@@ -57,6 +57,7 @@ tu PIN.
   El APK queda en `android/app/build/outputs/apk/release/app-release.apk`. Respalda
   el keystore y su contraseña: sin ellos, los testers tendrían que desinstalar para
   recibir actualizaciones.
+
 - **iPhone ad-hoc:** el proyecto EAS ya existe y el entorno `preview` tiene la CA
   pública en `WASAP_CA_PEM`. Registra los equipos con `npx eas-cli device:create` y
   publica con `npx eas-cli build --platform ios --profile preview`; EAS pide iniciar

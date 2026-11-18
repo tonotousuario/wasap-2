@@ -14,7 +14,7 @@ import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-contex
 import {engine} from './native';
 import {explainError, LINK_LABEL, linkState, pendingLabel} from './format';
 import {Login, ServerScreen} from './screens/Access';
-import {Attendance} from './screens/Attendance';
+import {Attendance, ClassReport} from './screens/Attendance';
 import {Chats, NewChat, NewGroup} from './screens/Chats';
 import {Settings} from './screens/Settings';
 import {Members, Thread} from './screens/Thread';
@@ -147,6 +147,8 @@ function Root() {
     screen = <NewChat />;
   } else if (top?.name === 'newGroup') {
     screen = <NewGroup />;
+  } else if (top?.name === 'classReport') {
+    screen = <ClassReport key={top.id} id={top.id} />;
   } else {
     screen = <Tabs tab={tab} setTab={setTab} notice={notice} clearNotice={() => setNotice('')} />;
   }

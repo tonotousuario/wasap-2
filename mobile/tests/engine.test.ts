@@ -589,3 +589,70 @@ test('a restarted app resumes its queue in order with the original UUIDs', async
   );
   assert.equal(restarted.state.pendingCount, 0);
 });
+
+const redes = {id: 'c1', kind: 'GROUP', name: 'Redes', ownerId: 't1', lastSeq: '0', isClass: true, isOwner: false};
+test('selecting a class sends its classId and ignores attendance events of other classes', async () => {
+  const t = setup();
+  await t.engine.initialize();
+  const base = t.setHandler(async (type, payload) => {
+    if (type === 'classes.list') return {classes: [redes]};
+    if (type === 'attendance.state') return {lastEvent: null, nextType: 'ENTRY', classId: payload.classId ?? null};
+    if (type === 'attendance.mark')
+      return {
+        event: {id: 'e1', seq: '9', type: 'ENTRY', recordedAt: '2026-11-18T15:00:00Z', classId: payload.classId},
+        nextType: 'EXIT',
+        classId: payload.classId,
+      };
+    return base(type, payload);
+  });
+  await t.engine.login('123', '123456');
+  assert.deepEqual(
+    t.engine.state.classes.map(c => c.id),
+    ['c1'],
+  );
+  await t.engine.selectAttendanceClass('c1');
+  assert.equal(t.engine.state.attendanceClassId, 'c1');
+  assert.equal(t.calls.filter(c => c.type === 'attendance.state').at(-1)?.payload.classId, 'c1');
+  assert.equal(t.calls.filter(c => c.type === 'attendance.list').at(-1)?.payload.classId, 'c1');
+  await t.engine.markAttendance();
+  assert.equal(t.calls.find(c => c.type === 'attendance.mark')?.payload.classId, 'c1');
+  const state = t.engine.state.attendance;
+  t.event({
+    v: 1,
+    kind: 'event',
+    id: 'x',
+    type: 'attendance.changed',
+    payload: {
+      lastEvent: {id: 'door', seq: '99', type: 'ENTRY', recordedAt: '2026-11-18T16:00:00Z'},
+      nextType: 'EXIT',
+      classId: null,
+    },
+  });
+  assert.equal(t.engine.state.attendance, state, 'a general-door event does not touch the class view');
+});
+test('servers without classes simply show the general door', async () => {
+  const t = setup();
+  await t.engine.initialize();
+  const base = t.setHandler(async (type, payload) => {
+    if (type === 'classes.list') throw new ProtocolError('VALIDATION', 'Operación desconocida');
+    return base(type, payload);
+  });
+  await t.engine.login('123', '123456');
+  assert.deepEqual(t.engine.state.classes, []);
+  assert.equal(t.engine.state.attendanceClassId, null);
+  assert.equal(t.engine.state.attendance?.nextType, 'ENTRY');
+});
+test('being removed from the selected class returns to the general door', async () => {
+  const t = setup();
+  await t.engine.initialize();
+  let member = true;
+  const base = t.setHandler(async (type, payload) =>
+    type === 'classes.list' ? {classes: member ? [redes] : []} : base(type, payload),
+  );
+  await t.engine.login('123', '123456');
+  await t.engine.selectAttendanceClass('c1');
+  member = false;
+  await t.engine.refreshClasses();
+  assert.equal(t.engine.state.attendanceClassId, null);
+  assert.deepEqual(t.engine.state.events, []);
+});

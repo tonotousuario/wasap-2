@@ -18,8 +18,8 @@ muestra lo que el servidor confirmó**. Un reloj es «pendiente», una palomita 
 
 Capturas reales de la alpha firmada en Android ([más en la verificación](docs/verification.md)).
 
-| Asistencia | Chats | Conversación | Integrantes |
-| --- | --- | --- | --- |
+| Asistencia                                                                                                               | Chats                                                                                                | Conversación                                                                                                           | Integrantes                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | <img src="docs/images/wasap-attendance-in.png" alt="Asistencia: Dentro, entrada confirmada por el servidor" width="200"> | <img src="docs/images/wasap-chats.png" alt="Lista de chats: general, grupos y privados" width="200"> | <img src="docs/images/wasap-thread.png" alt="Chat general con mensajes confirmados con una sola palomita" width="200"> | <img src="docs/images/wasap-members.png" alt="Integrantes de un grupo con búsqueda para añadir" width="200"> |
 
 ## Cómo encaja
@@ -140,9 +140,11 @@ docker compose exec server /app/bin/wasap-server admin users add 20260001 'Ana P
 docker compose exec server /app/bin/wasap-server admin users list
 docker compose exec server /app/bin/wasap-server admin users reset-pin 20260001
 docker compose exec server /app/bin/wasap-server admin users logout 20260001
+docker compose exec server /app/bin/wasap-server admin users role 20260100 teacher
 docker compose exec server /app/bin/wasap-server admin server name 'Redes 5.º A'
 docker compose exec server /app/bin/wasap-server admin attendance 20260001 2026-11-01 2026-11-30
 docker compose exec server /app/bin/wasap-server admin attendance '*' 2026-11-01 2026-11-30
+docker compose exec -T server /app/bin/wasap-server admin attendance '*' 2026-11-01 2026-11-30 --class CLASE_ID --csv > redes.csv
 ```
 
 El PIN se solicita sin mostrarlo en una terminal interactiva; no lo pases como
@@ -153,6 +155,13 @@ ejemplo, si perdió el teléfono) e indica cuántas cerró; los teléfonos conec
 de recibir datos en un máximo de 5 segundos. La consulta de asistencia
 devuelve hasta 100 movimientos y un `nextCursor`; pásalo como último argumento para
 continuar. Las fechas son inclusivas en `APP_TIMEZONE` (America/Mexico_City por defecto).
+
+Cada cuenta es `student` al crearse. `admin users role` la cambia a `teacher` (puede
+crear clases con asistencia propia desde la app y ver su lista) o a `admin` (además
+asigna roles desde la app y ve la lista de cualquier clase); el cambio llega a los
+teléfonos conectados en un máximo de 5 segundos. Con `--class` la consulta se limita
+a una clase y con `--csv` exporta todas las páginas con columnas matrícula, nombre,
+clase («General» para la puerta), tipo e instante local.
 
 ## App Android e iPhone
 
