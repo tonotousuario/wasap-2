@@ -22,6 +22,8 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
     val service: Service
     lateinit var server: TcpServer
         private set
+    lateinit var tls: ReloadableServerTls
+        private set
 
     init {
         generateCertificates(certs)
@@ -32,13 +34,15 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
 
     private fun start(port: Int) {
         val storePassword = Files.readString(certs.resolve("keystore-password")).trim()
+        tls = ReloadableServerTls(certs.resolve("server.p12"), storePassword)
         server = TcpServer(
             service,
             db,
-            Tls.serverContext(certs.resolve("server.p12"), storePassword),
+            tls.context,
             "127.0.0.1",
             port,
             Sessions(DatabaseSessionStore(db), clock),
+            Tls.readCertificate(certs.resolve("ca.crt")),
         )
         server.start()
     }

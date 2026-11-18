@@ -9,6 +9,14 @@ Response reuses `id`, has `kind:"response"`, `type:"success"` and result in `pay
 or `type:"error"`, `payload:{code,message}`. Event: `kind:"event"`, fresh UUID `id`,
 `type:"message.created"|"conversations.changed"|"attendance.changed"`, `payload`.
 Malformed framing closes the socket. Semantic errors return an error response.
+A request whose `v` is not supported answers `UNSUPPORTED_VERSION` with
+`payload.supportedVersions` (currently `[1]`); the connection stays open.
+
+`server.hello` identifies the server before signing in: `serverId` is a stable UUID
+kept in the database (it survives restarts and backups), `name` is set by the
+administrator (`admin server name`), and `caFingerprint` is the lower-case hex
+SHA-256 of the installation CA certificate (DER). Clients that saved a server compare
+both values after the TLS handshake and refuse to send credentials on a mismatch.
 Errors: VALIDATION, UNAUTHENTICATED, INVALID_CREDENTIALS, RATE_LIMITED, FORBIDDEN,
 NOT_FOUND, CONFLICT, REQUEST_ID_REUSED, INTERNAL, UNAVAILABLE, UNSUPPORTED_VERSION.
 
@@ -39,6 +47,7 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | Type | Payload | Success payload |
 | --- | --- | --- |
 | ping | `{}` | `{ready:true}` |
+| server.hello | `{}` | `{serverId:UUID, name, protocolVersions:[1], caFingerprint}` (no session needed) |
 | auth.login | `{matricula,pin}` | `{token,expiresAt,user:{id,matricula,name}}` |
 | auth.resume | `{token}` | `{token,expiresAt,user:{id,matricula,name}}` |
 | auth.logout | `{}` | `{}` |

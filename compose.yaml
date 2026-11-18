@@ -18,12 +18,16 @@ services:
       TLS_KEYSTORE: /run/wasap/server.p12
       TLS_KEYSTORE_PASSWORD_FILE: /run/secrets/keystore_password
       TLS_CA_FILE: /run/wasap/ca.crt
+      # Writable: encrypted CA key and certificates issued by `certs issue` or the panel.
+      TLS_DIR: /var/lib/wasap/tls
+      SERVER_PUBLIC_ADDRESSES: ${SERVER_PUBLIC_ADDRESSES:-}
     secrets:
       - db_password
       - keystore_password
     volumes:
       - ./certs/server.p12:/run/wasap/server.p12:ro
       - ./certs/ca.crt:/run/wasap/ca.crt:ro
+      - ./certs/tls:/var/lib/wasap/tls
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777

@@ -42,12 +42,14 @@ services:
       TLS_KEYSTORE: /run/wasap/server.p12
       TLS_KEYSTORE_PASSWORD_FILE: /run/wasap/keystore-password
       TLS_CA_FILE: /run/wasap/ca.crt
+      TLS_DIR: /var/lib/wasap/tls
       JAVA_OPTS: -Xms64m -Xmx256m
     volumes:
       - ./certs/db-password:/run/wasap/db-password:ro,z
       - ./certs/server.p12:/run/wasap/server.p12:ro,z
       - ./certs/keystore-password:/run/wasap/keystore-password:ro,z
       - ./certs/ca.crt:/run/wasap/ca.crt:ro,z
+      - ./certs/tls:/var/lib/wasap/tls:z
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777

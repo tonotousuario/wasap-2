@@ -17,7 +17,13 @@ class TcpServer(
     host: String,
     requestedPort: Int,
     private val sessions: Sessions = Sessions(DatabaseSessionStore(db)),
+    /** Installation CA; its fingerprint is announced in server.hello. */
+    private val caCertificate: java.security.cert.X509Certificate? = null,
 ) : AutoCloseable {
+    companion object {
+        /** Protocol versions this server accepts; announced in server.hello. */
+        val PROTOCOL_VERSIONS = listOf(1)
+    }
     private val listener = (context.serverSocketFactory.createServerSocket() as SSLServerSocket).apply {
         enabledProtocols = arrayOf("TLSv1.3", "TLSv1.2")
         reuseAddress = true
@@ -132,12 +138,23 @@ class TcpServer(
                     val id = request.optional("id") ?: break
                     try {
                         uuid(id)
-                        if (request["v"]?.jsonPrimitive?.intOrNull != 1) throw ApiError("UNSUPPORTED_VERSION", "Se requiere versión 1")
+                        if (request["v"]?.jsonPrimitive?.intOrNull !in PROTOCOL_VERSIONS) {
+                            throw ApiError("UNSUPPORTED_VERSION", "Versión de protocolo no soportada", obj("supportedVersions" to PROTOCOL_VERSIONS))
+                        }
                         if (request.string("kind") != "request") invalid("Se requiere una solicitud")
                         val type = request.string("type")
                         val payload = request["payload"] as? JsonObject ?: invalid("payload debe ser un objeto")
                         val result = when (type) {
                             "ping" -> obj("ready" to db.ready())
+
+                            "server.hello" -> service.serverIdentity().let { identity ->
+                                obj(
+                                    "serverId" to identity.id,
+                                    "name" to identity.name,
+                                    "protocolVersions" to PROTOCOL_VERSIONS,
+                                    "caFingerprint" to caCertificate?.let(Tls::fingerprint),
+                                )
+                            }
 
                             "auth.login" -> {
                                 val matricula = payload.string("matricula")
@@ -186,7 +203,7 @@ class TcpServer(
                             System.err.println("event delivery deferred to history sync")
                         }
                     } catch (e: ApiError) {
-                        error(id, e.code, e.message)
+                        error(id, e.code, e.message, e.details)
                     } catch (e: Exception) {
                         if (isTransientDatabaseFailure(e)) {
                             error(id, "UNAVAILABLE", "La base de datos no está disponible; conserva la solicitud para reintentar")
@@ -201,7 +218,9 @@ class TcpServer(
                 close()
             }
         }
-        private fun error(id: String, code: String, message: String) = send(obj("v" to 1, "kind" to "response", "id" to id, "type" to "error", "payload" to obj("code" to code, "message" to message)))
+        private fun error(id: String, code: String, message: String, details: JsonObject = JsonObject(emptyMap())) = send(
+            obj("v" to 1, "kind" to "response", "id" to id, "type" to "error", "payload" to JsonObject(details + obj("code" to code, "message" to message))),
+        )
         private fun notify(type: String, payload: JsonObject, result: JsonObject) {
             val eventType: String
             val data: JsonObject

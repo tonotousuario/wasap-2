@@ -26,8 +26,85 @@ private fun readPin(): String {
         readlnOrNull() ?: error("PIN required")
     }
 }
+private fun readSecret(prompt: String, confirm: Boolean): CharArray {
+    val console = System.console()
+    if (console == null) {
+        System.err.println("$prompt (stdin; usa una terminal interactiva para ocultar la entrada):")
+        return (readlnOrNull() ?: error("Secret required")).toCharArray()
+    }
+    val first = console.readPassword("$prompt: ") ?: error("Secret required")
+    if (confirm) {
+        val second = console.readPassword("Repite la frase: ") ?: error("Secret required")
+        if (!first.contentEquals(second)) {
+            second.fill('\u0000')
+            first.fill('\u0000')
+            invalid("Las frases no coinciden")
+        }
+        second.fill('\u0000')
+    }
+    return first
+}
+
+private fun tlsDirectory() = TlsDirectory(Path.of(env("TLS_DIR", "/var/lib/wasap/tls")))
+
+/** Values of a repeatable `--flag value` option. */
+private fun options(args: List<String>, flag: String): List<String> = args.indices.filter { args[it] == flag }.map {
+    args.getOrNull(it + 1) ?: invalid("Falta el valor de $flag")
+}
+
+private fun certs(args: List<String>) {
+    val tls = tlsDirectory()
+    when (args.firstOrNull()) {
+        "init" -> {
+            val passphrase = readSecret("Frase nueva de la CA (mínimo 12 caracteres)", confirm = true)
+            try {
+                val ca = CertificateAuthority.create(tls, passphrase, args.getOrNull(1) ?: "Wasap Installation CA")
+                println("CA creada en ${tls.dir}; huella SHA-256 ${Tls.fingerprint(ca)}")
+                println("Guarda una copia offline de la frase: sin ella no se pueden emitir certificados.")
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+
+        "import" -> {
+            val key = Path.of(args.getOrNull(1) ?: invalid("certs import RUTA_CA_KEY [RUTA_CA_CRT]"))
+            val certificate = Path.of(args.getOrNull(2) ?: env("TLS_CA_FILE", "/run/wasap/ca.crt"))
+            val passphrase = readSecret("Frase nueva para cifrar la CA (mínimo 12 caracteres)", confirm = true)
+            try {
+                val ca = CertificateAuthority.import(tls, key, certificate, passphrase)
+                println("CA importada y cifrada en ${tls.caKey}; huella SHA-256 ${Tls.fingerprint(ca)}")
+                println("Borra la copia en claro de $key de este equipo y guarda una copia offline.")
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+
+        "issue" -> {
+            val explicit = options(args, "--address")
+            val addresses = explicit.ifEmpty { NetworkAddresses.detect(System.getenv("SERVER_PUBLIC_ADDRESSES")) }
+            val days = options(args, "--days").lastOrNull()?.let { it.toLongOrNull()?.takeIf { d -> d in 1..825 } ?: invalid("--days debe estar entre 1 y 825") } ?: 365
+            val passphrase = readSecret("Frase de la CA", confirm = false)
+            try {
+                val issued = CertificateAuthority.issue(tls, passphrase, addresses, options(args, "--dns"), days)
+                println("Certificado emitido hasta ${issued.notAfter} para ${(issued.addresses + issued.dnsNames).joinToString()}")
+                println("El servidor en marcha lo usará en las conexiones nuevas en unos segundos, sin reiniciar.")
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+
+        "status" -> println(CertificateStatus.describe(tls))
+
+        else -> invalid("Usa: certs init [NOMBRE] | import RUTA_CA_KEY [RUTA_CA_CRT] | issue [--address IP]... [--dns NOMBRE]... [--days N] | status")
+    }
+}
+
 fun main(args: Array<String>) {
     try {
+        if (args.firstOrNull() == "certs") {
+            certs(args.drop(1))
+            return
+        }
         if (args.firstOrNull() == "healthcheck") {
             val context = Tls.clientContext(Path.of(env("TLS_CA_FILE", "/run/wasap/ca.crt")))
             (context.socketFactory.createSocket(env("HEALTH_HOST", "127.0.0.1"), env("SERVER_PORT", "5050").toInt()) as SSLSocket).use { socket ->
@@ -64,6 +141,14 @@ fun main(args: Array<String>) {
 
                     listOf("users", "list") -> println(json(service.users()))
 
+                    listOf("server", "name") -> {
+                        require(args.size == 4) { "admin server name 'Nombre del servidor'" }
+                        val identity = service.renameServer(args[3])
+                        println("Servidor ${identity.id}: ${identity.name}")
+                    }
+
+                    listOf("server", "show") -> service.serverIdentity().let { println("Servidor ${it.id}: ${it.name}") }
+
                     else -> {
                         require(args.getOrNull(1) == "attendance" && args.size in 3..6) { "admin attendance MATRICULA|* [DESDE YYYY-MM-DD] [HASTA YYYY-MM-DD] [CURSOR]" }
                         val p = obj("from" to args.getOrNull(3), "to" to args.getOrNull(4), "before" to args.getOrNull(5), "limit" to 100)
@@ -72,16 +157,29 @@ fun main(args: Array<String>) {
                 }
             } else {
                 require(args.isEmpty() || args.toList() == listOf("serve")) { "Use serve, healthcheck or admin" }
-                val keystore = Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12"))
-                val keystorePassword = secret("TLS_KEYSTORE_PASSWORD")
-                val context = Tls.serverContext(keystore, keystorePassword)
+                // A certificate issued into TLS_DIR wins; otherwise the provisioned TLS_KEYSTORE is used.
+                val tls = tlsDirectory()
+                val (keystore, keystorePassword) = if (tls.hasIssuedCertificate()) {
+                    tls.keystore to tls.readKeystorePassword()
+                } else {
+                    Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12")) to secret("TLS_KEYSTORE_PASSWORD")
+                }
+                val serverTls = ReloadableServerTls(keystore, keystorePassword)
+                val context = serverTls.context
+                val watcher = CertificateWatcher(tls, serverTls)
                 val sessions = Sessions(DatabaseSessionStore(db))
-                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions)
+                val ca = Tls.caFromKeystore(keystore, keystorePassword)
+                    ?: System.getenv("TLS_CA_FILE")?.let { Tls.readCertificate(Path.of(it)) }
+                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca)
                 val maintenance = Maintenance()
                 maintenance.every(1, TimeUnit.HOURS, "processed request purge") { service.purgeProcessedRequests(retention) }
                 maintenance.every(1, TimeUnit.HOURS, "expired session purge") { sessions.purgeExpired() }
-                val expiry = Tls.earliestExpiry(keystore, keystorePassword)
-                maintenance.every(24, TimeUnit.HOURS, "certificate expiry check") { Tls.expiryWarning(expiry)?.let(System.err::println) }
+                maintenance.every(10, TimeUnit.SECONDS, "certificate reload") {
+                    if (watcher.check()) println("TLS certificate reloaded from ${tls.keystore}")
+                }
+                maintenance.every(24, TimeUnit.HOURS, "certificate expiry check") {
+                    Tls.expiryWarning(Tls.earliestExpiry(serverTls.keystore, serverTls.password))?.let(System.err::println)
+                }
                 val stop = CountDownLatch(1)
                 Runtime.getRuntime().addShutdownHook(
                     Thread {

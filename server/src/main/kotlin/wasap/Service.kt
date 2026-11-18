@@ -8,6 +8,8 @@ import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
 
+data class ServerIdentity(val id: String, val name: String)
+
 class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
     private val mutations = setOf("attendance.mark", "conversations.direct", "groups.create", "groups.add", "groups.remove", "messages.send")
     private val userColumns = "id::text, matricula, name"
@@ -325,4 +327,19 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         }
     }
     fun users(): List<JsonObject> = db.transaction { it.rows("SELECT $userColumns FROM users ORDER BY matricula") }
+
+    @Volatile private var identityCache: ServerIdentity? = null
+
+    /** This server's stable identity, read once and cached; renaming refreshes it. */
+    fun serverIdentity(): ServerIdentity = identityCache ?: db.transaction { c ->
+        val row = c.rows("SELECT id::text, name FROM server_identity").single()
+        ServerIdentity(row.string("id"), row.string("name"))
+    }.also { identityCache = it }
+
+    fun renameServer(name: String): ServerIdentity {
+        val clean = text(name, 80, "Nombre del servidor")
+        db.transaction { it.exec("UPDATE server_identity SET name = ?", clean) }
+        identityCache = null
+        return serverIdentity()
+    }
 }

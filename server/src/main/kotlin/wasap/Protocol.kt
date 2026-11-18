@@ -6,7 +6,12 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
 
-class ApiError(val code: String, override val message: String) : RuntimeException(message)
+class ApiError(
+    val code: String,
+    override val message: String,
+    /** Extra fields added to the error payload next to code and message. */
+    val details: JsonObject = JsonObject(emptyMap()),
+) : RuntimeException(message)
 fun invalid(message: String): Nothing = throw ApiError("VALIDATION", message)
 fun json(value: Any?): JsonElement = when (value) {
     null -> JsonNull

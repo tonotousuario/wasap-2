@@ -89,16 +89,47 @@ configura `sslrootcert` según pgJDBC. No desactives la validación TLS para pro
 El contenedor aplica las migraciones antes de escuchar y comprueba su salud por
 TLS y base de datos. Las contraseñas y certificados privados no van en la imagen.
 
-El certificado público `certs/ca.crt` se incorpora a la compilación móvil. Guarda
-`ca.key` fuera del contenedor y de los teléfonos. Si cambia la IP, vuelve a ejecutar
-el script con la misma CA y reinicia el servidor; no hace falta cambiar la CA de la
-app. Si cambia la CA sí se necesita recompilar la app. Los certificados del servidor
-duran un año; el script permite renovarlos. Cuando falten menos de 30 días para
-que venzan, el servidor escribe un aviso `WARNING: TLS certificate expires on …` en
-su salida de error al arrancar y una vez al día (`docker compose logs server`). Para
-renovarlo, ejecuta de nuevo `bash scripts/create-certs.sh <IP>` con la misma CA y
-reinicia el servidor; la app no necesita recompilarse. Un certificado vencido impide
-arrancar. No incluyas `certs/` ni `.env` en Git.
+El certificado público `certs/ca.crt` se incorpora a la compilación móvil. Si cambia
+la CA sí se necesita recompilar la app; cambiar de IP o renovar el certificado del
+servidor, no.
+
+### Certificados desde el servidor (recomendado)
+
+El servidor guarda la clave de la CA **cifrada con una frase tuya** en `certs/tls/`
+(montado como `TLS_DIR`) y emite y recarga su propio certificado sin reiniciar.
+Créalo una vez y pásale tu CA actual:
+
+```bash
+mkdir -p certs/tls && chmod 700 certs/tls
+docker compose run --rm -T -v ./certs/ca.key:/run/wasap/ca.key:ro server \
+  certs import /run/wasap/ca.key /run/wasap/ca.crt
+```
+
+El comando pide una frase de al menos 12 caracteres (en una terminal no se muestra).
+Después, **borra `certs/ca.key` de este equipo** y guarda una copia offline junto con
+la frase: sin la frase la clave cifrada no sirve, y sin la copia no podrás recuperar
+la CA. En una instalación nueva, `certs init` crea la CA directamente.
+
+Para emitir o renovar el certificado del servidor:
+
+```bash
+docker compose exec server /app/bin/wasap-server certs issue            # direcciones detectadas
+docker compose exec server /app/bin/wasap-server certs issue \
+  --address 192.168.1.50 --address 10.8.0.1 --dns wasap.escuela.local  # o explícitas
+docker compose exec server /app/bin/wasap-server certs status
+```
+
+El certificado cubre todas las direcciones indicadas (más `127.0.0.1`), así sirve a
+teléfonos de varias redes. Dentro del contenedor solo se ven sus propias interfaces:
+pon las IPs del equipo anfitrión en `SERVER_PUBLIC_ADDRESSES` o pásalas con
+`--address`. El servidor en marcha usa el certificado nuevo en las conexiones nuevas
+en unos 10 segundos; las abiertas siguen igual. Mientras no emitas ninguno, sigue
+usando `certs/server.p12`. Los certificados duran un año. Cuando falten menos de 30
+días, el servidor escribe `WARNING: TLS certificate expires on …` al arrancar y una vez
+al día (`docker compose logs server`). Un certificado vencido impide arrancar.
+
+`scripts/create-certs.sh` sigue disponible para crear la CA inicial sin el servidor.
+No incluyas `certs/` ni `.env` en Git.
 
 Para probar desde Linux sin abrir Android Studio, sigue la [guía para iniciar el emulador por terminal](mobile/README.md#emulador-android-desde-la-terminal-sin-abrir-android-studio), con conexión al servidor local y Metro.
 
@@ -109,6 +140,7 @@ docker compose exec server /app/bin/wasap-server admin users add 20260001 'Ana P
 docker compose exec server /app/bin/wasap-server admin users list
 docker compose exec server /app/bin/wasap-server admin users reset-pin 20260001
 docker compose exec server /app/bin/wasap-server admin users logout 20260001
+docker compose exec server /app/bin/wasap-server admin server name 'Redes 5.º A'
 docker compose exec server /app/bin/wasap-server admin attendance 20260001 2026-11-01 2026-11-30
 docker compose exec server /app/bin/wasap-server admin attendance '*' 2026-11-01 2026-11-30
 ```
