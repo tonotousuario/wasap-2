@@ -15,6 +15,7 @@ import {
   type RangePreset,
 } from '../format';
 import type {AttendanceEvent, ReportEvent} from '../types';
+import type {SignupRequest} from '../engine';
 import {run, useEngine, useNav} from '../ui/app';
 import {
   Button,
@@ -483,6 +484,7 @@ export function ClassReport({id}: {id: string}) {
     <View style={{flex: 1, backgroundColor: c.bg}}>
       <TopBar title="Lista de la clase" subtitle={info?.name} onBack={nav.pop} />
       <ScrollView contentContainerStyle={{padding: space.lg, paddingBottom: space.xxl, gap: space.md}}>
+        <Enrollment classId={id} />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -575,6 +577,119 @@ export function ClassReport({id}: {id: string}) {
           />
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+/** Teacher tools for a class: its sign-up code and the requests waiting for approval. */
+function Enrollment({classId}: {classId: string}) {
+  const state = useEngine();
+  const {c} = useTheme();
+  const [code, setCode] = useState<string | null>(null);
+  const [requests, setRequests] = useState<SignupRequest[]>([]);
+  const [busy, setBusy] = useState('');
+  const [problem, setProblem] = useState('');
+  const run = async (key: string, task: () => Promise<unknown>) => {
+    setBusy(key);
+    setProblem('');
+    try {
+      await task();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+      engine.clearError();
+    } finally {
+      setBusy('');
+    }
+  };
+  const reload = () => engine.signupRequests(classId).then(setRequests);
+  useEffect(() => {
+    if (!state.online) return;
+    void engine
+      .classCode(classId)
+      .then(result => setCode(result.code))
+      .catch(() => setCode(null));
+    void reload().catch(() => {});
+    // signupVersion: a new request arrived or another device decided one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId, state.online, state.signupVersion]);
+  return (
+    <View style={{gap: space.md, backgroundColor: c.bgAlt, borderRadius: radius.block, padding: space.lg}}>
+      <Text style={[type.small, {color: c.textSoft, fontWeight: '600'}]}>Código de autorregistro</Text>
+      <View style={{flexDirection: 'row', alignItems: 'center', gap: space.md}}>
+        <Text
+          selectable
+          accessibilityLabel={code ? `Código ${code.split('').join(' ')}` : 'Sin código'}
+          style={{
+            flex: 1,
+            fontSize: 30,
+            fontWeight: '700',
+            letterSpacing: 4,
+            color: c.text,
+            fontVariant: ['tabular-nums'],
+          }}
+        >
+          {code ?? '— — — —'}
+        </Text>
+        <Button
+          variant="text"
+          icon="refresh"
+          label="Renovar"
+          loading={busy === 'renew'}
+          disabled={!state.online || !!busy}
+          onPress={() => void run('renew', async () => setCode((await engine.classCode(classId, true)).code))}
+        />
+      </View>
+      <Text style={[type.small, {color: c.textSoft}]}>
+        Díctalo o escríbelo en el pizarrón: con él, tus estudiantes piden entrar desde «Soy nuevo». Renovarlo invalida
+        el anterior.
+      </Text>
+      {!!problem && <Notice tone="error" title="No se pudo" body={problem} onClose={() => setProblem('')} />}
+      {!!requests.length && (
+        <View style={{gap: space.sm, paddingTop: space.sm}}>
+          <Text accessibilityRole="header" style={[type.small, {color: c.textSoft, fontWeight: '600'}]}>
+            {requests.length === 1 ? '1 solicitud pendiente' : `${requests.length} solicitudes pendientes`}
+          </Text>
+          {requests.map(request => (
+            <View
+              key={request.matricula}
+              style={{gap: space.xs, borderTopWidth: 1, borderColor: c.line, paddingTop: space.sm}}
+            >
+              <Text style={[type.body, {color: c.text}]}>{request.name}</Text>
+              <Text style={[type.small, {color: c.textSoft}]}>{request.matricula}</Text>
+              <View style={{flexDirection: 'row', gap: space.sm}}>
+                <View style={{flex: 1}}>
+                  <Button
+                    variant="tonal"
+                    label="Aprobar"
+                    loading={busy === 'approve:' + request.matricula}
+                    disabled={!state.online || !!busy}
+                    onPress={() =>
+                      void run('approve:' + request.matricula, async () => {
+                        await engine.decideSignup(request.matricula, true);
+                        await reload();
+                      })
+                    }
+                  />
+                </View>
+                <View style={{flex: 1}}>
+                  <Button
+                    variant="text"
+                    label="Rechazar"
+                    loading={busy === 'reject:' + request.matricula}
+                    disabled={!state.online || !!busy}
+                    onPress={() =>
+                      void run('reject:' + request.matricula, async () => {
+                        await engine.decideSignup(request.matricula, false);
+                        await reload();
+                      })
+                    }
+                  />
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

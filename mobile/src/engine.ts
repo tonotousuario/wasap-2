@@ -14,7 +14,7 @@ import type {
 } from './types.ts';
 import {ConnectError, errorCode, errorDetail} from './errors.ts';
 import {presetRange, type RangePreset} from './format.ts';
-import {joinAddress, parseServerLink, pemToDer, splitAddress, type ServerLink} from './enrollment.ts';
+import {joinAddress, parseServerLink, pemToDer, splitAddress, type LinkKind, type ServerLink} from './enrollment.ts';
 
 export const MAX_SERVERS = 10;
 const INSTALLATION = 'installation';
@@ -41,7 +41,18 @@ export type SavedServer = {
 /** What a scanned or pasted link would do, before the user confirms. */
 export type ServerPreview =
   | {ok: false; reason: string}
-  | {ok: true; link: ServerLink; fingerprint: string; status: 'new' | 'known' | 'ca-changed'};
+  | {
+      ok: true;
+      link: ServerLink;
+      fingerprint: string;
+      status: 'new' | 'known' | 'ca-changed';
+      /** What the QR is for besides adding the server. */
+      kind: LinkKind;
+      code?: string;
+      className?: string;
+    };
+/** A pending self sign-up as the class owner sees it. */
+export type SignupRequest = {matricula: string; name: string; classId: string; className: string; createdAt: string};
 export type ConnectTarget = Server & {caPem: string};
 export type Connection = {
   closed: boolean;
@@ -86,6 +97,8 @@ export type AppState = {
   classes: ClassInfo[];
   /** Class whose attendance is shown and marked; null = the general door. */
   attendanceClassId: string | null;
+  /** Bumped by signup.changed so open teacher screens reload their pending list. */
+  signupVersion: number;
   conversations: Conversation[];
   messages: Record<string, Message[]>;
   older: Record<string, string | null>;
@@ -113,6 +126,7 @@ export class Engine {
     attendanceFilters: {},
     classes: [],
     attendanceClassId: null,
+    signupVersion: 0,
     conversations: [],
     messages: {},
     older: {},
@@ -751,6 +765,8 @@ export class Engine {
       if ((changed.classId ?? null) !== this.state.attendanceClassId) return;
       this.applyAttendance(changed);
       void this.loadAttendance().catch(error => this.report(error));
+    } else if (event.type === 'signup.changed') {
+      this.update({signupVersion: this.state.signupVersion + 1});
     } else if (event.type === 'conversations.changed') {
       void this.refreshConversations().catch(error => this.report(error));
       void this.refreshClasses().catch(error => this.report(error));
@@ -834,7 +850,64 @@ export class Engine {
     const status = !existing ? 'new' : existing.fingerprint === fingerprint ? 'known' : 'ca-changed';
     if (status === 'new' && this.state.servers.length >= MAX_SERVERS)
       return {ok: false, reason: `Puedes guardar hasta ${MAX_SERVERS} servidores. Elimina uno para añadir otro.`};
-    return {ok: true, link: parsed.server, fingerprint, status};
+    return {
+      ok: true,
+      link: parsed.server,
+      fingerprint,
+      status,
+      kind: parsed.kind,
+      ...(parsed.code ? {code: parsed.code} : {}),
+      ...(parsed.className ? {className: parsed.className} : {}),
+    };
+  }
+  /** Redeems a personal invitation on the active server with the PIN the student chose. */
+  async redeemInvitation(code: string, pin: string) {
+    if (this.state.busy) throw new Error('Espera a que termine la operación actual');
+    this.update({busy: true, error: '', errorCode: ''});
+    try {
+      await this.open();
+      const session = await this.connection!.request('invites.redeem', {code, pin}, this.deps.uuid());
+      await this.activate(session);
+    } catch (error) {
+      this.report(error);
+      throw error;
+    } finally {
+      this.update({busy: false});
+    }
+  }
+  /** Asks to join a class on the active server; the account stays pending until approved. */
+  async requestSignup(classCode: string, matricula: string, name: string, pin: string) {
+    if (this.state.busy) throw new Error('Espera a que termine la operación actual');
+    this.update({busy: true, error: '', errorCode: ''});
+    try {
+      await this.open();
+      await this.connection!.request(
+        'signup.request',
+        {classCode: classCode.trim().toUpperCase(), matricula: matricula.trim(), name: name.trim(), pin},
+        this.deps.uuid(),
+      );
+    } catch (error) {
+      this.report(error);
+      throw error;
+    } finally {
+      // No session comes out of a sign-up: do not keep an anonymous socket open.
+      if (!this.state.session) {
+        ++this.generation;
+        this.connection?.close();
+        this.connection = null;
+      }
+      this.update({busy: false});
+    }
+  }
+  /** The class sign-up code (owner or admin); [renew] replaces it. */
+  async classCode(classId: string, renew = false): Promise<{code: string; link?: string}> {
+    return this.query('classes.code', {classId, renew});
+  }
+  async signupRequests(classId: string): Promise<SignupRequest[]> {
+    return (await this.query('signup.list', {classId})).requests;
+  }
+  async decideSignup(matricula: string, approve: boolean) {
+    return this.mutate(approve ? 'signup.approve' : 'signup.reject', {matricula});
   }
   /**
    * Saves a confirmed preview and makes it active. A changed CA replaces the old one only with
@@ -860,6 +933,12 @@ export class Engine {
     const servers = existing
       ? this.state.servers.map(server => (server.id === link.id ? entry : server))
       : [...this.state.servers, entry];
+    const unchanged =
+      existing &&
+      existing.fingerprint === fingerprint &&
+      existing.name === link.name &&
+      existing.addresses.join() === link.addresses.join();
+    if (unchanged && link.id === this.state.activeServerId) return;
     if (link.id === this.state.activeServerId) {
       await this.suspend();
       await this.saveServers(servers, link.id);

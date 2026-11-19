@@ -45,7 +45,7 @@ function setup(
         caFingerprint: host.fingerprint ?? caFingerprint,
       };
     }
-    if (type === 'auth.login' || type === 'auth.resume')
+    if (type === 'auth.login' || type === 'auth.resume' || type === 'invites.redeem')
       return {
         token: 'tok-' + host.serverId,
         expiresAt: '2027-01-01T00:00:00Z',
@@ -331,4 +331,79 @@ test('the installation server is edited by hand; QR servers are not', async () =
   await assert.rejects(none.engine.configure({host: '10.0.0.5', port: 5050}), /código QR/);
   await assert.rejects(none.engine.login('123', '123456'));
   assert.equal(none.engine.state.errorCode, 'CONNECT_CONFIG');
+});
+
+test('an invitation QR adds the server and redeeming it signs in with the chosen PIN', async () => {
+  const t = setup({'10.0.0.1:5050': {serverId: 'A'}});
+  await t.engine.initialize();
+  const invite =
+    link('A', 'Aula', ['10.0.0.1:5050']).replace('wasap://server?', 'wasap://invite?') +
+    '&code=ABCDEFGHJKLMNPQRSTUVWXYZ23';
+  const preview = await t.engine.previewServer(invite);
+  assert.ok(preview.ok);
+  assert.equal(preview.kind, 'invite');
+  assert.equal(preview.code, 'ABCDEFGHJKLMNPQRSTUVWXYZ23');
+  await t.engine.enrollServer(preview);
+  await t.engine.redeemInvitation(preview.code!, '482915');
+  const types = t.log.map(c => c.type);
+  assert.ok(types.indexOf('server.hello') < types.indexOf('invites.redeem'), 'identity first');
+  assert.deepEqual(t.log.find(c => c.type === 'invites.redeem')?.payload, {
+    code: 'ABCDEFGHJKLMNPQRSTUVWXYZ23',
+    pin: '482915',
+  });
+  assert.equal(t.engine.state.session?.token, 'tok-A');
+  assert.equal(t.engine.state.online, true);
+  assert.ok(t.secure.values.has('wasap.session.A'));
+});
+
+test('a rejected invitation surfaces INVITATION_INVALID and leaves no session', async () => {
+  const t = setup({'10.0.0.1:5050': {serverId: 'A'}});
+  await t.engine.initialize();
+  await enroll(t.engine, link('A', 'Aula', ['10.0.0.1:5050']));
+  const prior = t.setHandler(async (host, type, payload) => {
+    if (type === 'invites.redeem')
+      throw new ProtocolError('INVITATION_INVALID', 'La invitación no es válida o ya se usó');
+    return prior(host, type, payload);
+  });
+  await assert.rejects(t.engine.redeemInvitation('ABCDEFGHJKLMNPQRSTUVWXYZ23', '482915'));
+  assert.equal(t.engine.state.errorCode, 'INVITATION_INVALID');
+  assert.equal(t.engine.state.session, null);
+});
+
+test('a sign-up request leaves no session or open socket, and login then reports PENDING_APPROVAL', async () => {
+  const t = setup({'10.0.0.1:5050': {serverId: 'A'}});
+  await t.engine.initialize();
+  await enroll(t.engine, link('A', 'Aula', ['10.0.0.1:5050']));
+  let pending = true;
+  const prior = t.setHandler(async (host, type, payload) => {
+    if (type === 'signup.request') return {status: 'pending'};
+    if (type === 'auth.login' && pending) throw new ProtocolError('PENDING_APPROVAL', 'Pendiente');
+    return prior(host, type, payload);
+  });
+  await t.engine.requestSignup(' k7px2m9q ', ' s001 ', ' Sofía ', '246810');
+  assert.deepEqual(t.log.find(c => c.type === 'signup.request')?.payload, {
+    classCode: 'K7PX2M9Q',
+    matricula: 's001',
+    name: 'Sofía',
+    pin: '246810',
+  });
+  assert.equal(t.engine.state.session, null);
+  assert.equal(t.secure.values.has('wasap.session.A'), false);
+  await assert.rejects(t.engine.login('S001', '246810'));
+  assert.equal(t.engine.state.errorCode, 'PENDING_APPROVAL');
+  pending = false;
+  await t.engine.login('S001', '246810');
+  const after = (): typeof t.engine.state => t.engine.state;
+  assert.equal(after().session?.token, 'tok-A');
+});
+
+test('signup.changed bumps a counter so open teacher screens reload', async () => {
+  const t = setup({'10.0.0.1:5050': {serverId: 'A'}});
+  await t.engine.initialize();
+  await enroll(t.engine, link('A', 'Aula', ['10.0.0.1:5050']));
+  await t.engine.login('123', '123456');
+  const before = t.engine.state.signupVersion;
+  // The fake network has no event channel; call the engine's event hook directly.
+  (t.engine as any).onEvent({v: 1, kind: 'event', id: 'x', type: 'signup.changed', payload: {classId: 'c1'}});
+  assert.equal(t.engine.state.signupVersion, before + 1);
 });

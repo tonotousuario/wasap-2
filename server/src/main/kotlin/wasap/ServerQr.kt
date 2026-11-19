@@ -24,14 +24,20 @@ object ServerQr {
     const val VERSION = 1
     const val MAX_ADDRESSES = 5
 
-    fun link(id: String, name: String, addresses: List<String>, ca: X509Certificate): String {
+    /**
+     * `wasap://<kind>?v=1&id&name&a…&ca[&extra…]`: invite and signup links carry the same server
+     * data as the server QR, so scanning one also adds the server.
+     */
+    fun link(id: String, name: String, addresses: List<String>, ca: X509Certificate, kind: String = "server", extra: List<Pair<String, String>> = emptyList()): String {
+        require(kind in setOf("server", "invite", "signup"))
         if (addresses.isEmpty() || addresses.size > MAX_ADDRESSES) invalid("El QR lleva entre 1 y $MAX_ADDRESSES direcciones")
         if (ca.basicConstraints < 0) invalid("El certificado del QR debe ser el de la CA")
         addresses.forEach(::checkAddress)
         val ca64 = Base64.getUrlEncoder().withoutPadding().encodeToString(ca.encoded)
         return buildString {
-            append("wasap://server?v=$VERSION&id=").append(encode(id)).append("&name=").append(encode(name))
+            append("wasap://$kind?v=$VERSION&id=").append(encode(id)).append("&name=").append(encode(name))
             addresses.forEach { append("&a=").append(encode(it)) }
+            extra.forEach { (k, v) -> append('&').append(k).append('=').append(encode(v)) }
             append("&ca=").append(ca64)
         }
     }
@@ -104,4 +110,12 @@ object ServerQr {
     }
 
     private fun isLoopback(ip: String) = runCatching { InetAddress.ofLiteral(ip).isLoopbackAddress }.getOrDefault(false)
+}
+
+/** What enrollment links need besides the server identity: public addresses and the CA. */
+class EnrollmentLinks(private val addresses: () -> List<String>, private val ca: X509Certificate, private val identity: () -> ServerIdentity) {
+    private fun build(kind: String, extra: List<Pair<String, String>>) = identity().let { ServerQr.link(it.id, it.name, addresses(), ca, kind, extra) }
+    fun server() = build("server", emptyList())
+    fun invite(code: String) = build("invite", listOf("code" to code))
+    fun signup(code: String, className: String) = build("signup", listOf("code" to code, "class" to className))
 }

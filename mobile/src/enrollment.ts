@@ -7,15 +7,19 @@ export const LINK_PREFIX = 'wasap://server?';
 export const MAX_ADDRESSES = 5;
 
 export type ServerLink = {id: string; name: string; addresses: string[]; caDer: Uint8Array; caPem: string};
-export type LinkResult = {ok: true; server: ServerLink} | {ok: false; reason: string};
+/** server: just the server; invite: plus a personal code; signup: plus a class code and class name. */
+export type LinkKind = 'server' | 'invite' | 'signup';
+export type LinkResult =
+  {ok: true; kind: LinkKind; server: ServerLink; code?: string; className?: string} | {ok: false; reason: string};
 
 const NOT_WASAP = 'No es un servidor Wasap compatible.';
 
 export function parseServerLink(text: string): LinkResult {
   const value = text.trim();
-  if (!value.startsWith(LINK_PREFIX)) return {ok: false, reason: NOT_WASAP};
+  const kind = (['server', 'invite', 'signup'] as const).find(k => value.startsWith(`wasap://${k}?`));
+  if (!kind) return {ok: false, reason: NOT_WASAP};
   const params: [string, string][] = [];
-  for (const part of value.slice(LINK_PREFIX.length).split('&')) {
+  for (const part of value.slice(`wasap://${kind}?`.length).split('&')) {
     const at = part.indexOf('=');
     if (at < 1) return {ok: false, reason: NOT_WASAP};
     try {
@@ -46,7 +50,13 @@ export function parseServerLink(text: string): LinkResult {
     return {ok: false, reason: 'El certificado del QR está dañado.'};
   }
   if (!isCaCertificate(caDer)) return {ok: false, reason: 'El certificado del QR no es el de una autoridad (CA).'};
-  return {ok: true, server: {id, name, addresses: [...new Set(addresses)], caDer, caPem: derToPem(caDer)}};
+  const code = one('code')?.trim().toUpperCase();
+  const valid = kind === 'invite' ? /^[A-Z2-9]{26}$/ : /^[A-Z2-9]{8}$/;
+  if (kind !== 'server' && (!code || !valid.test(code)))
+    return {ok: false, reason: 'El código del QR está incompleto. Pide uno nuevo.'};
+  const server = {id, name, addresses: [...new Set(addresses)], caDer, caPem: derToPem(caDer)};
+  if (kind === 'server') return {ok: true, kind, server};
+  return {ok: true, kind, server, code, ...(kind === 'signup' ? {className: one('class')?.trim() || undefined} : {})};
 }
 
 /** `host:port` → parts; IPv6 literals in brackets; port 1–65535. */

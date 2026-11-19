@@ -186,6 +186,16 @@ export function explainError(code: string, message: string): Explained {
   switch (code) {
     case 'INVALID_CREDENTIALS':
       return {title: 'Matrícula o PIN incorrectos', body: 'Revisa tus datos y vuelve a intentarlo.'};
+    case 'PENDING_APPROVAL':
+      return {
+        title: 'Pendiente de aprobación',
+        body: 'Tu profesor aún no aprueba tu registro. Podrás entrar con tu PIN en cuanto lo haga.',
+      };
+    case 'INVITATION_INVALID':
+      return {
+        title: 'Código no válido',
+        body: 'La invitación o el código de clase ya se usó, caducó o fue renovado. Pide uno nuevo a tu profesor.',
+      };
     case 'RATE_LIMITED':
       return {title: 'Demasiados intentos', body: 'Espera un momento antes de intentarlo otra vez.'};
     case 'UNAUTHENTICATED':

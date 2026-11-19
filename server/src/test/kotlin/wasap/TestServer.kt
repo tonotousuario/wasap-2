@@ -43,6 +43,7 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
             port,
             Sessions(DatabaseSessionStore(db), clock),
             Tls.readCertificate(certs.resolve("ca.crt")),
+            EnrollmentLinks({ listOf("127.0.0.1:${server.port}") }, Tls.readCertificate(certs.resolve("ca.crt")), service::serverIdentity),
         )
         server.start()
     }

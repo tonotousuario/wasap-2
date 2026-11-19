@@ -19,6 +19,8 @@ class TcpServer(
     private val sessions: Sessions = Sessions(DatabaseSessionStore(db)),
     /** Installation CA; its fingerprint is announced in server.hello. */
     private val caCertificate: java.security.cert.X509Certificate? = null,
+    /** Builds invite/signup links; without it responses carry only the codes. */
+    private val links: EnrollmentLinks? = null,
 ) : AutoCloseable {
     companion object {
         /** Protocol versions this server accepts; announced in server.hello. */
@@ -64,6 +66,15 @@ class TcpServer(
         writeTimers.shutdownNow()
         workers.shutdownNow()
         workers.awaitTermination(5, TimeUnit.SECONDS)
+    }
+
+    /** Tells the class owner's devices that the pending sign-ups changed. */
+    private fun signupChanged(recipients: Set<String>, classId: String) {
+        val frame = obj("v" to 1, "kind" to "event", "id" to UUID.randomUUID(), "type" to "signup.changed", "payload" to obj("classId" to classId))
+        clients.forEach { client ->
+            val recipient = client.cachedUserId() ?: return@forEach
+            if (recipient in recipients) client.send(frame, recipient)
+        }
     }
 
     private inner class Client(private val socket: SSLSocket) : AutoCloseable {
@@ -181,6 +192,29 @@ class TcpServer(
                                 sessions.create(user, user.credentialVersion).also { replaceSession(it) }.toJson()
                             }
 
+                            // Onboarding without a session: same IP limiter and PIN workers as login.
+                            "invites.redeem", "signup.request" -> {
+                                val ipKey = "ip:${socket.inetAddress.hostAddress}"
+                                limiter.check(ipKey, 100)
+                                if (!pinWorkers.tryAcquire()) throw ApiError("RATE_LIMITED", "Intenta nuevamente")
+                                try {
+                                    if (type == "invites.redeem") {
+                                        val user = service.redeemInvitation(payload.string("code"), payload.string("pin"))
+                                        session?.let { sessions.remove(it.token) }
+                                        sessions.create(user, user.credentialVersion).also { replaceSession(it) }.toJson()
+                                    } else {
+                                        val result = service.requestSignup(payload.string("classCode"), payload.string("matricula"), payload.string("name"), payload.string("pin"))
+                                        signupChanged(setOf(result.string("ownerId")), result.string("classId"))
+                                        obj("status" to "pending")
+                                    }
+                                } catch (e: ApiError) {
+                                    if (e.code == "INVITATION_INVALID") limiter.fail(ipKey)
+                                    throw e
+                                } finally {
+                                    pinWorkers.release()
+                                }
+                            }
+
                             "auth.resume" -> {
                                 replaceSession(sessions.get(payload.string("token")))
                                 authenticated(force = true).toJson()
@@ -192,7 +226,7 @@ class TcpServer(
                                 obj()
                             }
 
-                            else -> service.call(authenticated().user.id, type, payload, id)
+                            else -> withLinks(type, service.call(authenticated().user.id, type, payload, id))
                         }
                         if (session != null) socket.soTimeout = 90000
                         send(obj("v" to 1, "kind" to "response", "id" to id, "type" to "success", "payload" to result), conversationId = if (type == "messages.list" || type == "groups.members") payload.uuid("conversationId") else null)
@@ -218,6 +252,27 @@ class TcpServer(
                 close()
             }
         }
+
+        /** Adds the scannable links to fresh invitation and class codes. */
+        private fun withLinks(type: String, result: JsonObject): JsonObject {
+            val links = links ?: return result
+            return when (type) {
+                "invites.create" -> JsonObject(result + ("link" to json(links.invite(result.string("code")))))
+
+                "invites.import" -> JsonObject(
+                    result + (
+                        "invitations" to JsonArray(
+                            result["invitations"]!!.jsonArray.map { JsonObject(it.jsonObject + ("link" to json(links.invite(it.jsonObject.string("code"))))) },
+                        )
+                        ),
+                )
+
+                "classes.code" -> JsonObject(result + ("link" to json(links.signup(result.string("code"), service.className(result.string("classId"))))))
+
+                else -> result
+            }
+        }
+
         private fun error(id: String, code: String, message: String, details: JsonObject = JsonObject(emptyMap())) = send(
             obj("v" to 1, "kind" to "response", "id" to id, "type" to "error", "payload" to JsonObject(details + obj("code" to code, "message" to message))),
         )
@@ -233,6 +288,11 @@ class TcpServer(
                 type == "attendance.mark" -> {
                     eventType = "attendance.changed"
                     data = service.call(session?.user?.id ?: return, "attendance.state", JsonObject(payload.filterKeys { it == "classId" }), UUID.randomUUID().toString())
+                }
+
+                type == "signup.approve" || type == "signup.reject" -> {
+                    signupChanged(setOf(session?.user?.id ?: return), result.string("classId"))
+                    return
                 }
 
                 type == "conversations.direct" || (type.startsWith("groups.") && type != "groups.members") -> {

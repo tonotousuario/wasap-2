@@ -18,18 +18,20 @@ administrator (`admin server name`), and `caFingerprint` is the lower-case hex
 SHA-256 of the installation CA certificate (DER). Clients that saved a server compare
 both values after the TLS handshake and refuse to send credentials on a mismatch.
 Errors: VALIDATION, UNAUTHENTICATED, INVALID_CREDENTIALS, RATE_LIMITED, FORBIDDEN,
-NOT_FOUND, CONFLICT, REQUEST_ID_REUSED, INTERNAL, UNAVAILABLE, UNSUPPORTED_VERSION.
+NOT_FOUND, CONFLICT, REQUEST_ID_REUSED, INTERNAL, UNAVAILABLE, UNSUPPORTED_VERSION,
+INVITATION_INVALID, PENDING_APPROVAL.
 
 Retry semantics for mutations. Only two codes mean the same request UUID may still
 succeed later; clients keep the pending mutation and resend it unchanged:
+
 - `UNAVAILABLE`: transient database failure (SQLSTATE class 08 connection, 40
   serialization/deadlock, 53 insufficient resources, 57 cancellation/operator, or no
   pooled connection in time). Nothing was committed.
 - `UNAUTHENTICATED`: sign in again as the same user, then resend.
-Every other error is final and the client discards the pending mutation. In particular
-`INTERNAL` covers deterministic failures (constraint violations, invalid data, bugs):
-nothing was committed and resending the same request would fail again. Error messages
-never include database text.
+  Every other error is final and the client discards the pending mutation. In particular
+  `INTERNAL` covers deterministic failures (constraint violations, invalid data, bugs):
+  nothing was committed and resending the same request would fail again. Error messages
+  never include database text.
 
 ## Frame layout
 
@@ -44,28 +46,37 @@ All payloads/results below are JSON objects. UUID strings identify users,
 conversations, requests and attendance events. Sequence values are decimal strings
 to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 
-| Type | Payload | Success payload |
-| --- | --- | --- |
-| ping | `{}` | `{ready:true}` |
-| server.hello | `{}` | `{serverId:UUID, name, protocolVersions:[1], caFingerprint}` (no session needed) |
-| auth.login | `{matricula,pin}` | `{token,expiresAt,user:{id,matricula,name}}` |
-| auth.resume | `{token}` | `{token,expiresAt,user:{id,matricula,name}}` |
-| auth.logout | `{}` | `{}` |
-| users.list | `{query:string}` (≥3 characters after trimming) | `{users:[{id,matricula,name}]}` (max 100) |
-| attendance.state | `{classId?:UUID}` | `{lastEvent:Event|null,nextType:"ENTRY"|"EXIT",classId:UUID|null,timezone?:string,today?:"YYYY-MM-DD"}` |
-| attendance.mark | `{expectedLastEventId:UUID|null,classId?:UUID}` | `{event:Event,nextType,classId:UUID|null}` |
-| attendance.list | `{classId?:UUID,before?:string,limit?:number,from?:"YYYY-MM-DD",to?:"YYYY-MM-DD"}` | `{events:[Event],nextCursor:string|null}` |
-| attendance.classReport | `{classId,from?,to?,before?,limit?}` | `{events:[Event+{matricula,name,className}],nextCursor}` (class owner or admin) |
-| classes.list | `{}` | `{classes:[Conversation+{isOwner:boolean}]}` |
-| users.setRole | `{matricula,role:"admin"|"teacher"|"student"}` | `{user:{id,matricula,name,role}}` (admin only) |
-| conversations.list | `{after?:UUID,limit?:number}` | `{conversations:[Conversation],nextCursor:UUID|null}` (id ASC) |
-| conversations.direct | `{matricula}` | `{conversation:Conversation}` |
-| groups.create | `{name,matriculas:string[],class?:boolean}` | `{conversation:Conversation}` (`class:true` needs teacher or admin) |
-| groups.members | `{conversationId}` | `{members:[{id,matricula,name}]}` |
-| groups.add | `{conversationId,matricula}` | `{}` |
-| groups.remove | `{conversationId,matricula}` | `{}` |
-| messages.list | `{conversationId,before?:string,after?:string,limit?:number}` | `{messages:[Message],nextCursor:string|null}` |
-| messages.send | `{conversationId,text}` | `{message:Message}` |
+| Type                           | Payload                                                                            | Success payload                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| ping                           | `{}`                                                                               | `{ready:true}`                                                                   |
+| server.hello                   | `{}`                                                                               | `{serverId:UUID, name, protocolVersions:[1], caFingerprint}` (no session needed) |
+| auth.login                     | `{matricula,pin}`                                                                  | `{token,expiresAt,user:{id,matricula,name}}`                                     |
+| auth.resume                    | `{token}`                                                                          | `{token,expiresAt,user:{id,matricula,name}}`                                     |
+| auth.logout                    | `{}`                                                                               | `{}`                                                                             |
+| users.list                     | `{query:string}` (≥3 characters after trimming)                                    | `{users:[{id,matricula,name}]}` (max 100)                                        |
+| attendance.state               | `{classId?:UUID}`                                                                  | `{lastEvent:Event                                                                | null,nextType:"ENTRY"               | "EXIT",classId:UUID                            | null,timezone?:string,today?:"YYYY-MM-DD"}` |
+| attendance.mark                | `{expectedLastEventId:UUID                                                         | null,classId?:UUID}`                                                             | `{event:Event,nextType,classId:UUID | null}`                                         |
+| attendance.list                | `{classId?:UUID,before?:string,limit?:number,from?:"YYYY-MM-DD",to?:"YYYY-MM-DD"}` | `{events:[Event],nextCursor:string                                               | null}`                              |
+| attendance.classReport         | `{classId,from?,to?,before?,limit?}`                                               | `{events:[Event+{matricula,name,className}],nextCursor}` (class owner or admin)  |
+| classes.list                   | `{}`                                                                               | `{classes:[Conversation+{isOwner:boolean}]}`                                     |
+| users.setRole                  | `{matricula,role:"admin"                                                           | "teacher"                                                                        | "student"}`                         | `{user:{id,matricula,name,role}}` (admin only) |
+| invites.create                 | `{matricula,name,classId?,days?:1..30}`                                            | `{invitation:{id,matricula,name,classId,expiresAt},code,link?}`                  |
+| invites.import                 | `{csv:"matricula,nombre…",classId?,days?}` (≤200 rows)                             | `{invitations:[…+{code,link?}]}`                                                 |
+| invites.list                   | `{classId?}`                                                                       | `{invitations:[{id,matricula,name,classId,expiresAt,status:"open"                | "used"                              | "expired"                                      | "revoked"}]}`                               |
+| invites.revoke                 | `{id}`                                                                             | `{}`                                                                             |
+| invites.redeem                 | `{code,pin}` (no session)                                                          | same as `auth.login`                                                             |
+| classes.code                   | `{classId,renew?:boolean}`                                                         | `{classId,code,link?}` (class owner or admin)                                    |
+| signup.request                 | `{classCode,matricula,name,pin}` (no session)                                      | `{status:"pending"}`                                                             |
+| signup.list                    | `{classId?}`                                                                       | `{requests:[{matricula,name,classId,className,createdAt}]}`                      |
+| signup.approve / signup.reject | `{matricula}`                                                                      | `{classId}` (class owner or admin)                                               |
+| conversations.list             | `{after?:UUID,limit?:number}`                                                      | `{conversations:[Conversation],nextCursor:UUID                                   | null}` (id ASC)                     |
+| conversations.direct           | `{matricula}`                                                                      | `{conversation:Conversation}`                                                    |
+| groups.create                  | `{name,matriculas:string[],class?:boolean}`                                        | `{conversation:Conversation}` (`class:true` needs teacher or admin)              |
+| groups.members                 | `{conversationId}`                                                                 | `{members:[{id,matricula,name}]}`                                                |
+| groups.add                     | `{conversationId,matricula}`                                                       | `{}`                                                                             |
+| groups.remove                  | `{conversationId,matricula}`                                                       | `{}`                                                                             |
+| messages.list                  | `{conversationId,before?:string,after?:string,limit?:number}`                      | `{messages:[Message],nextCursor:string                                           | null}`                              |
+| messages.send                  | `{conversationId,text}`                                                            | `{message:Message}`                                                              |
 
 `users.list` is a search, never a full directory: `query` is required and must have at
 least 3 Unicode characters (code points) after trimming, otherwise VALIDATION. It
@@ -90,6 +101,32 @@ as in v1. Removing a student keeps their past movements in the class.
 `attendance.changed` carries the `classId` of the movement (null for the door).
 `attendance.classReport` lists every member's movements in a class, newest first,
 for its owner or an admin.
+
+### Invitations and self sign-up
+
+The PIN is always chosen by the student. An invitation is a single-use code of 26
+characters (130 random bits) tied to a matrícula and name, optionally to a class; it
+expires after `days` (7 by default). Only its SHA-256 is stored, so `invites.create`
+and `invites.import` are not replayed from the request log: retrying makes a new
+code. Admins invite anyone (an invitation for an existing account resets its PIN and
+ends its sessions); teachers invite only to classes they own and only matrículas
+without an account (CONFLICT otherwise; add those to the class instead).
+`invites.redeem` consumes the code atomically, creates or activates the account,
+joins the class and returns a session. Used, expired, revoked and unknown codes all
+answer `INVITATION_INVALID` with the same message.
+
+Each class has one 8-character sign-up code (`classes.code`; `renew:true` replaces
+it). `signup.request` creates a pending account (CONFLICT if the matrícula exists;
+`INVITATION_INVALID` for an unknown or renewed code; RATE_LIMITED with 20 pending in
+the class) and sends `signup.changed {classId}` to the class owner. A pending account
+is not in the directory and cannot join groups; `auth.login` answers
+`PENDING_APPROVAL` only after the PIN checks out. Approving activates it and joins the
+class; rejecting deletes it. Both no-session operations share the login's per-IP
+limiter (invalid codes count as failures) and PIN workers.
+
+`link` is present when the server knows its public addresses and CA:
+`wasap://invite?v=1&id&name&a…&code&ca` and `wasap://signup?v=1&id&name&a…&code&class&ca`
+carry the server QR data plus the code, so scanning one also adds the server.
 `peer` identifies the other member of a DIRECT conversation from the requesting
 user's perspective; it is absent for GENERAL and GROUP. It is returned by
 `conversations.list` and `conversations.direct`. Older stored mutation replies may

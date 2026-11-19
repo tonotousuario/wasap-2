@@ -168,6 +168,30 @@ de recibir datos en un máximo de 5 segundos. La consulta de asistencia
 devuelve hasta 100 movimientos y un `nextCursor`; pásalo como último argumento para
 continuar. Las fechas son inclusivas en `APP_TIMEZONE` (America/Mexico_City por defecto).
 
+### Altas sin conocer el PIN
+
+El PIN siempre lo elige el estudiante. Hay dos formas de darlo de alta:
+
+```sh
+# Invitaciones personales (una o desde un CSV «matricula,nombre»), opcionalmente a una clase:
+docker compose exec server /app/bin/wasap-server admin invites add 20260001 'Ana Pérez' --class CLASE_ID
+docker compose exec server /app/bin/wasap-server admin invites import /var/lib/wasap/tls/grupo.csv --class CLASE_ID --png /var/lib/wasap/tls/qr
+# Autorregistro: el profesor ve el código de su clase en «Lista de la clase»; se aprueba ahí o aquí:
+docker compose exec server /app/bin/wasap-server admin signups
+docker compose exec server /app/bin/wasap-server admin signups approve 20260002
+```
+
+- **Invitación:** un código de un solo uso que caduca en 7 días (`--days` de 1 a 30).
+  La consola imprime `matricula,nombre,caduca,enlace` y, con `--png`, un QR por
+  estudiante. Al escanearlo, la app añade el servidor y solo pide elegir el PIN. Un
+  profesor invita desde el protocolo a sus clases; nunca a una matrícula que ya tiene
+  cuenta (esa se añade a la clase). La invitación de un administrador para una cuenta
+  existente sirve para restablecer su PIN.
+- **Autorregistro:** cada clase tiene un código de 8 caracteres renovable. En la app,
+  «Soy nuevo: tengo un código de clase» pide matrícula, nombre y PIN; la cuenta queda
+  pendiente (`PENDING_APPROVAL` al entrar) hasta que el profesor la aprueba. Máximo 20
+  solicitudes pendientes por clase.
+
 Cada cuenta es `student` al crearse. `admin users role` la cambia a `teacher` (puede
 crear clases con asistencia propia desde la app y ver su lista) o a `admin` (además
 asigna roles desde la app y ve la lista de cualquier clase); el cambio llega a los

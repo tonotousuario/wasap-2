@@ -109,6 +109,24 @@ que tenía la sesión de PROF01.
   servidor.
 - **Iniciales:** «Profa. Rivera (tú)» muestra «PR».
 
+## Altas por invitación y autorregistro (18 de noviembre de 2026)
+
+Servidor local migrado a V6 sobre los datos existentes. Todo en `emulator-5554` con el
+APK de release.
+
+| Invitación de un servidor guardado                                                                                                                 | Elegir PIN de una invitación                                                                                         | Autorregistro                                                                                                                       | Pendiente al entrar                                                                                                    | Profesora aprueba                                                                                                                             | Ya aprobada                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| <img src="images/android-invite-preview.png" alt="Wasap Android: invitación de un servidor ya guardado, con huella y botón Continuar" width="130"> | <img src="images/android-invite-pin.png" alt="Wasap Android: elegir y repetir el PIN de una invitación" width="130"> | <img src="images/android-signup-form.png" alt="Wasap Android: formulario con código de clase, matrícula, nombre y PIN" width="130"> | <img src="images/android-signup-pending.png" alt="Wasap Android: aviso Pendiente de aprobación al entrar" width="130"> | <img src="images/android-signup-approve.png" alt="Wasap Android: código de autorregistro y una solicitud con Aprobar y Rechazar" width="130"> | <img src="images/android-signup-approved.png" alt="Wasap Android: la estudiante aprobada ve la clase Redes 5A" width="130"> |
+
+- **Invitación:** `admin invites add INV001 'Iván Invitado' --class <Redes 5A>` imprimió
+  el enlace `wasap://invite`. Al pegarlo, la app reconoció el servidor ya guardado y
+  pidió solo el PIN; Iván entró con 482915 y vio «Redes 5A». La invitación quedó usada.
+- **Autorregistro:** la profesora vio el código `WGX4L3RC` en «Lista de la clase». Desde
+  «Soy nuevo», AUTO01 envió su solicitud; al intentar entrar recibió «Pendiente de
+  aprobación». La profesora la vio al abrir «Lista de la clase» y la aprobó en la app (el aviso en
+  vivo `signup.changed` se comprobó en las pruebas de integración) y AUTO01 entró con su PIN y vio la clase.
+- En ningún momento la consola ni la profesora conocieron los PIN.
+
 ## Comprobaciones realizadas
 
 | Área               | Evidencia                                                                   | Alcance                                                                                                       |

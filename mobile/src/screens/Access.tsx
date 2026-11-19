@@ -113,6 +113,12 @@ export function Login() {
           onPress={login}
           hint={!ready && !state.busy ? 'Escribe tu matrícula y un PIN de 6 a 12 dígitos' : undefined}
         />
+        <Button
+          variant="text"
+          label="Soy nuevo: tengo un código de clase"
+          disabled={state.busy}
+          onPress={() => nav.push({name: 'signup'})}
+        />
       </View>
 
       <View style={{flex: 1}} />

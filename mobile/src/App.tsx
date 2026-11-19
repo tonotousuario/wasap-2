@@ -15,6 +15,7 @@ import {engine} from './native';
 import {explainError, LINK_LABEL, linkState, pendingLabel} from './format';
 import {Login, ServerScreen} from './screens/Access';
 import {EnrollServer, PasteLink, ScanServer, Servers} from './screens/Servers';
+import {Redeem, Signup} from './screens/Onboarding';
 import {Attendance, ClassReport} from './screens/Attendance';
 import {Chats, NewChat, NewGroup} from './screens/Chats';
 import {Settings} from './screens/Settings';
@@ -31,7 +32,15 @@ const TABS: {id: Tab; label: string; icon: IconName; iconOn: IconName; title: st
 ];
 
 /** Screens about servers stay open when the session changes underneath them. */
-const SERVER_ROUTES = new Set<Route['name']>(['server', 'serverAddress', 'scan', 'pasteLink', 'enroll']);
+const SERVER_ROUTES = new Set<Route['name']>([
+  'server',
+  'serverAddress',
+  'scan',
+  'pasteLink',
+  'enroll',
+  'redeem',
+  'signup',
+]);
 
 export default function App() {
   return (
@@ -149,6 +158,10 @@ function Root() {
     screen = <PasteLink />;
   } else if (top?.name === 'enroll') {
     screen = <EnrollServer key={top.text} text={top.text} />;
+  } else if (top?.name === 'redeem') {
+    screen = <Redeem code={top.code} />;
+  } else if (top?.name === 'signup') {
+    screen = <Signup code={top.code} className={top.className} />;
   } else if (!signedIn) {
     screen = <Login />;
   } else if (top?.name === 'thread') {

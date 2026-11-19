@@ -13,7 +13,9 @@ export type Route =
   | {name: 'serverAddress'}
   | {name: 'scan'}
   | {name: 'pasteLink'}
-  | {name: 'enroll'; text: string};
+  | {name: 'enroll'; text: string}
+  | {name: 'redeem'; code: string}
+  | {name: 'signup'; code?: string; className?: string};
 export type Navigation = {
   push(route: Route): void;
   pop(): void;

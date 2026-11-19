@@ -54,8 +54,11 @@ private fun servingKeystore(tls: TlsDirectory): Pair<Path, String> = if (tls.has
     Path.of(env("TLS_KEYSTORE", "/run/wasap/server.p12")) to secret("TLS_KEYSTORE_PASSWORD")
 }
 
-/** `certs qr`: prints the enrollment link and QR, optionally also as PNG. */
-private fun serverQr(service: Service, args: List<String>) {
+/**
+ * Links for this server: `--address` values (or the serving certificate's addresses, read on
+ * each use so a hot-reloaded certificate is picked up) and the installation CA.
+ */
+private fun enrollmentLinks(service: Service, args: List<String> = emptyList()): Pair<EnrollmentLinks, java.security.cert.X509Certificate> {
     val tls = tlsDirectory()
     val (keystore, password) = servingKeystore(tls)
     val ca = Tls.caFromKeystore(keystore, password)
@@ -63,18 +66,46 @@ private fun serverQr(service: Service, args: List<String>) {
         ?: System.getenv("TLS_CA_FILE")?.let { Tls.readCertificate(Path.of(it)) }
         ?: invalid("No se encontró el certificado de la CA")
     val port = env("SERVER_PUBLIC_PORT", env("SERVER_PORT", "5050")).toInt()
-    val addresses = options(args, "--address").map { ServerQr.withPort(it, port) }
-        .ifEmpty { ServerQr.defaultHosts(keystore, password).map { ServerQr.address(it, port) } }
+    val explicit = options(args, "--address").map { ServerQr.withPort(it, port) }
+    val addresses = { explicit.ifEmpty { servingKeystore(tls).let { (k, p) -> ServerQr.defaultHosts(k, p) }.map { ServerQr.address(it, port) } } }
+    return EnrollmentLinks(addresses, ca, service::serverIdentity) to ca
+}
+
+/** `certs qr`: prints the enrollment link and QR, optionally also as PNG. */
+private fun serverQr(service: Service, args: List<String>) {
+    val (links, ca) = enrollmentLinks(service, args)
+    val link = links.server()
+    print(ServerQr.terminal(ServerQr.matrix(link, margin = 2)))
     val identity = service.serverIdentity()
-    val link = ServerQr.link(identity.id, identity.name, addresses, ca)
-    val matrix = ServerQr.matrix(link, margin = 2)
-    print(ServerQr.terminal(matrix))
-    println("Servidor «${identity.name}» · ${addresses.joinToString()} · CA ${Tls.fingerprint(ca).take(23)}…")
+    println("Servidor «${identity.name}» · CA ${Tls.fingerprint(ca).take(23)}…")
     println(link)
     options(args, "--png").lastOrNull()?.let { path ->
         ServerQr.png(ServerQr.matrix(link), Path.of(path))
         println("PNG guardado en $path")
     }
+}
+
+/** `admin invites add|import`: prints `matricula,nombre,caduca,enlace` and optionally one PNG each. */
+private fun invites(service: Service, args: List<String>) {
+    val usage = "admin invites add MATRICULA NOMBRE | import ARCHIVO.csv  [--class ID] [--days N] [--png DIRECTORIO] [--address HOST[:PUERTO]]..."
+    val flags = setOf("--class", "--days", "--png", "--address")
+    val positional = args.filterIndexed { i, value -> value !in flags && args.getOrNull(i - 1) !in flags }
+    val rows = when (positional.firstOrNull()) {
+        "add" -> listOf((positional.getOrNull(1) ?: invalid(usage)) to (positional.getOrNull(2) ?: invalid(usage)))
+        "import" -> service.parseRoster(Files.readString(Path.of(positional.getOrNull(1) ?: invalid(usage))))
+        else -> invalid(usage)
+    }
+    val days = options(args, "--days").lastOrNull()?.let { it.toIntOrNull() ?: invalid("--days debe ser un número") } ?: 7
+    val created = service.adminInvitations(rows, options(args, "--class").lastOrNull(), days)
+    val (links, _) = enrollmentLinks(service, args)
+    val dir = options(args, "--png").lastOrNull()?.let { Path.of(it).also(Files::createDirectories) }
+    println("matricula,nombre,caduca,enlace")
+    created.forEach { invitation ->
+        val link = links.invite(invitation.code)
+        println(listOf(invitation.matricula, "\"${invitation.name.replace("\"", "\"\"")}\"", invitation.expiresAt, link).joinToString(","))
+        dir?.let { ServerQr.png(ServerQr.matrix(link), it.resolve("${invitation.matricula}.png")) }
+    }
+    dir?.let { System.err.println("${created.size} códigos QR en $it") }
 }
 
 /** Values of a repeatable `--flag value` option. */
@@ -153,6 +184,19 @@ fun main(args: Array<String>) {
             val service = Service(db, ZoneId.of(env("APP_TIMEZONE", "America/Mexico_City")))
             if (args.firstOrNull() == "certs") {
                 serverQr(service, args.drop(2))
+            } else if (args.firstOrNull() == "admin" && args.getOrNull(1) == "invites") {
+                invites(service, args.drop(2))
+            } else if (args.firstOrNull() == "admin" && args.getOrNull(1) == "signups") {
+                when (args.getOrNull(2)) {
+                    "list", null -> service.adminSignups().forEach { println("${it.string("matricula")}  ${it.string("name")}  · ${it.string("className")}  · ${it.string("createdAt")}") }
+
+                    "approve", "reject" -> {
+                        service.adminDecideSignup(args.getOrNull(3) ?: invalid("admin signups approve|reject MATRICULA"), args[2] == "approve")
+                        println(if (args[2] == "approve") "Solicitud aprobada" else "Solicitud rechazada")
+                    }
+
+                    else -> invalid("admin signups [list] | approve MATRICULA | reject MATRICULA")
+                }
             } else if (args.firstOrNull() == "admin") {
                 when (args.drop(1).take(2)) {
                     listOf("users", "add") -> {
@@ -211,7 +255,8 @@ fun main(args: Array<String>) {
                 val sessions = Sessions(DatabaseSessionStore(db))
                 val ca = Tls.caFromKeystore(keystore, keystorePassword)
                     ?: System.getenv("TLS_CA_FILE")?.let { Tls.readCertificate(Path.of(it)) }
-                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca)
+                val links = ca?.let { EnrollmentLinks({ ServerQr.defaultHosts(serverTls.keystore, serverTls.password).map { h -> ServerQr.address(h, env("SERVER_PUBLIC_PORT", env("SERVER_PORT", "5050")).toInt()) } }, it, service::serverIdentity) }
+                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca, links)
                 val maintenance = Maintenance()
                 maintenance.every(1, TimeUnit.HOURS, "processed request purge") { service.purgeProcessedRequests(retention) }
                 maintenance.every(1, TimeUnit.HOURS, "expired session purge") { sessions.purgeExpired() }

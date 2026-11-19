@@ -242,7 +242,8 @@ export function PasteLink() {
       <TopBar title="Pegar enlace" onBack={nav.pop} />
       <ScrollView contentContainerStyle={{padding: space.xl, gap: space.lg}} keyboardShouldPersistTaps="handled">
         <Text style={[type.body, {color: c.textSoft}]}>
-          Pega el enlace que empieza por wasap://server. Lo muestra la consola del servidor junto a su código QR.
+          Pega el enlace que empieza por wasap:// (de un servidor, una invitación o un registro de clase). Lo muestra la
+          consola del servidor junto a su código QR.
         </Text>
         <Field
           label="Enlace del servidor"
@@ -291,7 +292,10 @@ export function EnrollServer({text}: {text: string}) {
     setProblem('');
     try {
       await engine.enrollServer(preview, changed);
-      nav.home();
+      if (preview.kind === 'invite' && preview.code) nav.replace({name: 'redeem', code: preview.code});
+      else if (preview.kind === 'signup' && preview.code)
+        nav.replace({name: 'signup', code: preview.code, className: preview.className});
+      else nav.home();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
     } finally {
@@ -317,7 +321,17 @@ export function EnrollServer({text}: {text: string}) {
   return (
     <View style={{flex: 1, backgroundColor: c.bg}}>
       <TopBar
-        title={preview.status === 'new' ? 'Añadir servidor' : changed ? 'Identidad cambiada' : 'Actualizar servidor'}
+        title={
+          changed
+            ? 'Identidad cambiada'
+            : preview.kind === 'invite'
+              ? 'Invitación'
+              : preview.kind === 'signup'
+                ? `Registro en ${preview.className ?? 'una clase'}`
+                : preview.status === 'new'
+                  ? 'Añadir servidor'
+                  : 'Actualizar servidor'
+        }
         onBack={nav.pop}
       />
       <ScrollView contentContainerStyle={{padding: space.xl, paddingBottom: insets.bottom + space.xl, gap: space.lg}}>
@@ -333,7 +347,11 @@ export function EnrollServer({text}: {text: string}) {
             tone="info"
             icon="server"
             title="Ya tienes este servidor"
-            body="Se actualizarán su nombre y sus direcciones. Tu sesión se conserva."
+            body={
+              preview.kind === 'server'
+                ? 'Se actualizarán su nombre y sus direcciones. Tu sesión se conserva.'
+                : 'Continúa para usar tu código en este servidor.'
+            }
           />
         ) : null}
         <View style={{backgroundColor: c.bgAlt, borderRadius: radius.block, padding: space.lg, gap: space.md}}>
@@ -354,7 +372,15 @@ export function EnrollServer({text}: {text: string}) {
         {!!problem && <Notice tone="error" title="No se pudo guardar" body={problem} />}
         <Button
           variant={changed ? 'danger' : 'filled'}
-          label={preview.status === 'new' ? 'Añadir y usar' : changed ? 'Reemplazar identidad' : 'Actualizar y usar'}
+          label={
+            changed
+              ? 'Reemplazar identidad'
+              : preview.kind !== 'server'
+                ? 'Continuar'
+                : preview.status === 'new'
+                  ? 'Añadir y usar'
+                  : 'Actualizar y usar'
+          }
           loading={saving}
           disabled={state.busy}
           onPress={ask}
