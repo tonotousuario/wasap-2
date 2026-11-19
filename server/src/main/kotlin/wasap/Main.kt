@@ -256,10 +256,23 @@ fun main(args: Array<String>) {
                 val ca = Tls.caFromKeystore(keystore, keystorePassword)
                     ?: System.getenv("TLS_CA_FILE")?.let { Tls.readCertificate(Path.of(it)) }
                 val links = ca?.let { EnrollmentLinks({ ServerQr.defaultHosts(serverTls.keystore, serverTls.password).map { h -> ServerQr.address(h, env("SERVER_PUBLIC_PORT", env("SERVER_PORT", "5050")).toInt()) } }, it, service::serverIdentity) }
-                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca, links)
+                val limiter = LoginLimiter()
+                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca, links, limiter)
+                // The admin panel: HTTPS on its own port with the same reloadable certificate.
+                val panel = if (panelEnabled(System.getenv("PANEL_ENABLED"))) {
+                    val certificates = if (Files.exists(tls.caCertificate)) {
+                        PanelCertificates(tls, { NetworkAddresses.detect(System.getenv("SERVER_PUBLIC_ADDRESSES")) }, { watcher.check() })
+                    } else {
+                        null
+                    }
+                    PanelServer(service, db, context, env("PANEL_HOST", env("SERVER_HOST", "0.0.0.0")), env("PANEL_PORT", "5443").toInt(), limiter, links, certificates)
+                } else {
+                    null
+                }
                 val maintenance = Maintenance()
                 maintenance.every(1, TimeUnit.HOURS, "processed request purge") { service.purgeProcessedRequests(retention) }
                 maintenance.every(1, TimeUnit.HOURS, "expired session purge") { sessions.purgeExpired() }
+                panel?.let { p -> maintenance.every(1, TimeUnit.HOURS, "panel session purge") { p.sessions.purgeExpired() } }
                 maintenance.every(10, TimeUnit.SECONDS, "certificate reload") {
                     if (watcher.check()) println("TLS certificate reloaded from ${tls.keystore}")
                 }
@@ -270,11 +283,14 @@ fun main(args: Array<String>) {
                 Runtime.getRuntime().addShutdownHook(
                     Thread {
                         maintenance.close()
+                        panel?.close()
                         server.close()
                         stop.countDown()
                     },
                 )
                 server.start()
+                panel?.start()
+                println(panel?.let { "Panel HTTPS en el puerto ${it.port}" } ?: "Panel desactivado (PANEL_ENABLED=false)")
                 println("WASAP TLS/TCP listening on port ${server.port}; database ready")
                 stop.await()
             }

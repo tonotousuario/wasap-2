@@ -86,12 +86,26 @@ object ServerQr {
         }
     }
 
+    /** Scalable QR for the web panel: one path, dark modules on a white square. */
+    fun svg(matrix: BitMatrix): TrustedHtml = TrustedHtml(
+        buildString {
+            append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ${matrix.width} ${matrix.height}\" shape-rendering=\"crispEdges\" role=\"img\" aria-label=\"Código QR\">")
+            append("<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path fill=\"#000\" d=\"")
+            for (y in 0 until matrix.height) for (x in 0 until matrix.width) if (matrix[x, y]) append("M$x ${y}h1v1h-1z")
+            append("\"/></svg>")
+        },
+    )
+
+    fun pngBytes(matrix: BitMatrix, scale: Int = 8): ByteArray = java.io.ByteArrayOutputStream().also { ImageIO.write(image(matrix, scale), "png", it) }.toByteArray()
+
     fun png(matrix: BitMatrix, path: Path, scale: Int = 8) {
-        val image = BufferedImage(matrix.width * scale, matrix.height * scale, BufferedImage.TYPE_BYTE_BINARY)
+        Files.newOutputStream(path).use { ImageIO.write(image(matrix, scale), "png", it) }
+    }
+
+    private fun image(matrix: BitMatrix, scale: Int) = BufferedImage(matrix.width * scale, matrix.height * scale, BufferedImage.TYPE_BYTE_BINARY).also { image ->
         for (y in 0 until image.height) {
             for (x in 0 until image.width) image.setRGB(x, y, if (matrix[x / scale, y / scale]) 0x000000 else 0xFFFFFF)
         }
-        Files.newOutputStream(path).use { ImageIO.write(image, "png", it) }
     }
 
     /**

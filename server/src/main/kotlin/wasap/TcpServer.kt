@@ -21,6 +21,8 @@ class TcpServer(
     private val caCertificate: java.security.cert.X509Certificate? = null,
     /** Builds invite/signup links; without it responses carry only the codes. */
     private val links: EnrollmentLinks? = null,
+    /** Shared with the web panel so both count failed PINs together. */
+    internal val limiter: LoginLimiter = LoginLimiter(),
 ) : AutoCloseable {
     companion object {
         /** Protocol versions this server accepts; announced in server.hello. */
@@ -37,7 +39,6 @@ class TcpServer(
     private val clients = ConcurrentHashMap.newKeySet<Client>()
     private val permits = Semaphore(256)
     private val pinWorkers = Semaphore(4)
-    internal val limiter = LoginLimiter()
     private val writeTimers = Executors.newSingleThreadScheduledExecutor()
 
     fun start() {

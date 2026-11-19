@@ -10,7 +10,7 @@ import java.util.UUID
 
 data class ServerIdentity(val id: String, val name: String)
 
-class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
+class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
     // Invitation codes are never stored in clear, so invites.create/import are not replayable.
     private val mutations = setOf(
         "attendance.mark", "conversations.direct", "groups.create", "groups.add", "groups.remove", "messages.send",
@@ -31,30 +31,53 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
     private fun user(c: Connection, matricula: String): JsonObject = c.rows("SELECT $userColumns FROM users WHERE matricula=? AND status='active'", this.matricula(matricula)).firstOrNull()
         ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
 
-    fun createUser(matricula: String, name: String, pin: String): User {
+    // ---- Audit log (admin-web-panel) ----
+
+    /** Fields allowed in audit details; anything else (PIN, passphrases, codes) is dropped. */
+    private val auditFields = setOf("matricula", "name", "role", "count", "matriculas", "addresses", "dnsNames", "days", "notAfter", "sessions")
+
+    /** Records [action] by [actor] (null = console) inside the caller's transaction. */
+    internal fun audit(c: Connection, actor: String?, action: String, classId: String? = null, details: Map<String, Any?> = emptyMap()) {
+        val safe = JsonObject(details.filterKeys { it in auditFields }.mapValues { json(it.value) })
+        c.exec("INSERT INTO audit_log(actor_id,action,class_id,details) VALUES (?::uuid,?,?::uuid,?::jsonb)", actor, action, classId, safe.toString())
+    }
+
+    /** Records an action that has no transaction of its own (certificate issuance). */
+    fun audit(actor: String?, action: String, details: Map<String, Any?>) = db.transaction { audit(it, actor, action, null, details) }
+
+    fun createUser(matricula: String, name: String, pin: String, actor: String? = null): User {
         val normalized = this.matricula(matricula)
         val displayName = text(name, 120, "Nombre")
         val hash = Pins.hash(pin)
         val id = UUID.randomUUID().toString()
         return try {
-            db.transaction { it.exec("INSERT INTO users(id,matricula,name,pin_hash) VALUES (?::uuid,?,?,?)", id, normalized, displayName, hash) }
+            db.transaction {
+                it.exec("INSERT INTO users(id,matricula,name,pin_hash) VALUES (?::uuid,?,?,?)", id, normalized, displayName, hash)
+                audit(it, actor, "user.create", details = mapOf("matricula" to normalized, "name" to displayName))
+            }
             User(id, normalized, displayName)
         } catch (e: SQLException) {
             if (e.sqlState == "23505") throw ApiError("CONFLICT", "La matrícula ya existe") else throw e
         }
     }
-    fun resetPin(matricula: String, pin: String) {
+    fun resetPin(matricula: String, pin: String, actor: String? = null) {
         val hash = Pins.hash(pin)
         db.transaction { c ->
             val id = c.rows("UPDATE users SET pin_hash=?,credential_version=credential_version+1 WHERE matricula=? RETURNING id::text", hash, this.matricula(matricula)).firstOrNull()
                 ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
             c.exec("DELETE FROM sessions WHERE user_id=?::uuid", id.string("id"))
+            c.exec("DELETE FROM panel_sessions WHERE user_id=?::uuid", id.string("id"))
+            audit(c, actor, "user.pin_reset", details = mapOf("matricula" to this.matricula(matricula)))
         }
     }
 
     /** Ends every session of the user (lost phone); returns how many were closed. */
-    fun logoutUser(matricula: String): Int = db.transaction { c ->
-        c.exec("DELETE FROM sessions WHERE user_id=?::uuid", user(c, matricula).string("id"))
+    fun logoutUser(matricula: String, actor: String? = null): Int = db.transaction { c ->
+        val id = user(c, matricula).string("id")
+        c.exec("DELETE FROM panel_sessions WHERE user_id=?::uuid", id)
+        c.exec("DELETE FROM sessions WHERE user_id=?::uuid", id).also { closed ->
+            audit(c, actor, "user.logout", details = mapOf("matricula" to this.matricula(matricula), "sessions" to closed))
+        }
     }
 
     // Use an independently salted dummy hash to perform comparable work for unknown accounts.
@@ -180,6 +203,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             if (role !in setOf("admin", "teacher", "student")) invalid("El rol debe ser admin, teacher o student")
             val user = c.rows("UPDATE users SET role=? WHERE matricula=? RETURNING $userColumns, role", role, matricula(p.string("matricula"))).firstOrNull()
                 ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
+            audit(c, uid, "user.role", details = mapOf("matricula" to user.string("matricula"), "role" to role))
             obj("user" to user)
         }
 
@@ -373,7 +397,9 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
     fun adminAttendance(matricula: String?, payload: JsonObject): JsonObject = db.transaction { c ->
         val uid = matricula?.let { user(c, it).string("id") }
         val classId = payload.optional("classId")?.let(::uuid)
-        attendance(c, uid, payload, AttendanceScope(classId, all = classId == null), withOwner = true)
+        // door:true limits to the general door; otherwise no classId means every movement.
+        val door = (payload["door"] as? JsonPrimitive)?.booleanOrNull == true
+        attendance(c, uid, payload, AttendanceScope(classId, all = classId == null && !door), withOwner = true)
     }
 
     /**
@@ -434,26 +460,30 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         if (role(c, uid) !in allowed) throw ApiError("FORBIDDEN", "Tu rol no permite esta acción")
     }
 
-    fun setRole(matricula: String, role: String): User {
+    fun setRole(matricula: String, role: String, actor: String? = null): User {
         if (role !in setOf("admin", "teacher", "student")) invalid("El rol debe ser admin, teacher o student")
         return db.transaction { c ->
             c.rows("UPDATE users SET role=? WHERE matricula=? RETURNING $userColumns, role", role, this.matricula(matricula)).firstOrNull()
                 ?.let { it.toUser().copy(role = it.string("role")) }
+                ?.also { audit(c, actor, "user.role", details = mapOf("matricula" to it.matricula, "role" to role)) }
                 ?: throw ApiError("NOT_FOUND", "Matrícula no encontrada")
         }
     }
 
-    @Volatile private var identityCache: ServerIdentity? = null
+    @Volatile private var identityCache: Pair<ServerIdentity, Long>? = null
 
-    /** This server's stable identity, read once and cached; renaming refreshes it. */
-    fun serverIdentity(): ServerIdentity = identityCache ?: db.transaction { c ->
+    /** This server's identity, cached 5 s so a rename from the console shows up without a restart. */
+    fun serverIdentity(): ServerIdentity = identityCache?.takeIf { System.nanoTime() - it.second < 5_000_000_000L }?.first ?: db.transaction { c ->
         val row = c.rows("SELECT id::text, name FROM server_identity").single()
         ServerIdentity(row.string("id"), row.string("name"))
-    }.also { identityCache = it }
+    }.also { identityCache = it to System.nanoTime() }
 
-    fun renameServer(name: String): ServerIdentity {
+    fun renameServer(name: String, actor: String? = null): ServerIdentity {
         val clean = text(name, 80, "Nombre del servidor")
-        db.transaction { it.exec("UPDATE server_identity SET name = ?", clean) }
+        db.transaction {
+            it.exec("UPDATE server_identity SET name = ?", clean)
+            audit(it, actor, "server.rename", details = mapOf("name" to clean))
+        }
         identityCache = null
         return serverIdentity()
     }
@@ -497,6 +527,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val existing = normalized.filter { (m, _) -> c.rows("SELECT 1 AS ok FROM users WHERE matricula=? AND status='active'", m).isNotEmpty() }.map { it.first }
             if (existing.isNotEmpty()) throw ApiError("CONFLICT", "Ya tienen cuenta (añádelas a la clase): ${existing.take(10).joinToString()}", obj("matriculas" to existing))
         }
+        audit(c, uid, "invite.create", classId, mapOf("count" to normalized.size, "matriculas" to normalized.take(50).map { it.first }, "days" to days))
         return normalized.map { (m, n) ->
             val code = newInvitationCode()
             val row = c.rows(
@@ -613,7 +644,8 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         "invites.revoke" -> {
             val row = c.rows("SELECT class_id::text AS \"classId\" FROM invitations WHERE id=?::uuid", p.uuid("id")).firstOrNull() ?: throw ApiError("NOT_FOUND", "Invitación no encontrada")
             row.optional("classId")?.let { managedClass(c, uid, it) } ?: requireRole(c, uid, "admin")
-            c.exec("UPDATE invitations SET revoked_at = now() WHERE id=?::uuid AND used_at IS NULL AND revoked_at IS NULL", p.uuid("id"))
+            val revoked = c.rows("UPDATE invitations SET revoked_at = now() WHERE id=?::uuid AND used_at IS NULL AND revoked_at IS NULL RETURNING matricula", p.uuid("id")).firstOrNull()
+            if (revoked != null) audit(c, uid, "invite.revoke", row.optional("classId"), mapOf("matricula" to revoked.string("matricula")))
             obj()
         }
 
@@ -625,7 +657,10 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             val code = if (current != null && !renew) {
                 current
             } else {
-                newClassCode().also { c.exec("INSERT INTO class_codes(class_id,code) VALUES (?::uuid,?) ON CONFLICT (class_id) DO UPDATE SET code=EXCLUDED.code, created_at=now()", classId, it) }
+                newClassCode().also {
+                    c.exec("INSERT INTO class_codes(class_id,code) VALUES (?::uuid,?) ON CONFLICT (class_id) DO UPDATE SET code=EXCLUDED.code, created_at=now()", classId, it)
+                    audit(c, uid, if (current == null) "class.code_create" else "class.code_renew", classId)
+                }
             }
             obj("classId" to classId, "code" to code)
         }
@@ -676,6 +711,7 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
         val row = c.rows("SELECT u.id::text, r.class_id::text AS \"classId\" FROM users u JOIN signup_requests r ON r.user_id = u.id WHERE u.matricula=? FOR UPDATE OF u", matricula(matricula)).firstOrNull()
             ?: throw ApiError("NOT_FOUND", "No hay solicitud pendiente para esa matrícula")
         if (uid != null) managedClass(c, uid, row.string("classId"))
+        audit(c, uid, if (approve) "signup.approve" else "signup.reject", row.string("classId"), mapOf("matricula" to matricula(matricula)))
         if (approve) {
             c.exec("UPDATE users SET status='active' WHERE id=?::uuid", row.string("id"))
             c.exec("DELETE FROM signup_requests WHERE user_id=?::uuid", row.string("id"))
@@ -684,5 +720,83 @@ class Service(private val db: Database, private val zone: ZoneId = ZoneId.of("Am
             c.exec("DELETE FROM users WHERE id=?::uuid AND status='pending'", row.string("id"))
         }
         return row.string("classId")
+    }
+
+    // ---- Web panel queries (admin-web-panel) ----
+
+    fun role(uid: String): String = db.transaction { role(it, uid) }
+
+    fun requireAdmin(uid: String) = db.transaction { requireRole(it, uid, "admin") }
+
+    /** Classes [uid] manages: all for an admin, their own for a teacher. */
+    fun panelClasses(uid: String): List<JsonObject> = db.transaction { c ->
+        val admin = role(c, uid) == "admin"
+        c.rows(
+            """
+            SELECT k.id::text, k.name, u.name AS "ownerName", (k.owner_id = ?::uuid) AS "isOwner",
+              (SELECT count(*) FROM conversation_members m WHERE m.conversation_id = k.id) AS members,
+              (SELECT count(*) FROM signup_requests r WHERE r.class_id = k.id) AS pending
+            FROM conversations k JOIN users u ON u.id = k.owner_id
+            WHERE k.is_class AND (? OR k.owner_id = ?::uuid) ORDER BY k.name, k.id
+            """,
+            uid,
+            admin,
+            uid,
+        )
+    }
+
+    /** A managed class with its members; NOT_FOUND / FORBIDDEN like the protocol. */
+    fun panelClass(uid: String, classId: String): JsonObject = db.transaction { c ->
+        val row = managedClass(c, uid, uuid(classId))
+        val members = c.rows(
+            """
+            SELECT u.matricula, u.name, u.role FROM conversation_members m JOIN users u ON u.id = m.user_id
+            WHERE m.conversation_id = ?::uuid ORDER BY u.name, u.matricula
+            """,
+            row.string("id"),
+        )
+        JsonObject(row + ("isOwner" to json(row.optional("ownerId") == uid)) + ("members" to JsonArray(members)))
+    }
+
+    /** Class CSV for its owner or an admin. */
+    fun classAttendanceCsv(uid: String, classId: String, from: String?, to: String?): String {
+        db.transaction { managedClass(it, uid, uuid(classId)) }
+        return attendanceCsv(null, obj("classId" to classId, "from" to from, "to" to to))
+    }
+
+    /** Accounts for the admin page: optional search, at most 200. */
+    fun panelUsers(query: String?): List<JsonObject> = db.transaction { c ->
+        val q = query?.trim()?.takeIf { it.isNotEmpty() }
+        c.rows(
+            """
+            SELECT $userColumns, role, status,
+              (SELECT count(*) FROM sessions s WHERE s.user_id = users.id AND s.expires_at > now()) AS sessions
+            FROM users WHERE (?::text IS NULL OR strpos(lower(matricula), lower(?))>0 OR strpos(lower(name), lower(?))>0)
+            ORDER BY matricula LIMIT 200
+            """,
+            q,
+            q,
+            q,
+        )
+    }
+
+    /** Audit entries newest first: all for an admin, only their classes for a teacher. */
+    fun auditLog(uid: String, from: String?, to: String?, before: Long?, limit: Int = 50): JsonObject = db.transaction { c ->
+        val admin = role(c, uid) == "admin"
+        val start = date(from)?.atStartOfDay(zone)?.toInstant()
+        val end = date(to)?.plusDays(1)?.atStartOfDay(zone)?.toInstant()
+        val rows = c.rows(
+            """
+            SELECT a.id, a.at, a.action, a.details::text AS details, k.name AS "className", u.matricula AS actor
+            FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id LEFT JOIN conversations k ON k.id = a.class_id
+            WHERE (? OR k.owner_id = ?::uuid)
+              AND (?::bigint IS NULL OR a.id < ?::bigint)
+              AND (?::timestamptz IS NULL OR a.at >= ?::timestamptz) AND (?::timestamptz IS NULL OR a.at < ?::timestamptz)
+            ORDER BY a.id DESC LIMIT ?
+            """,
+            admin, uid, before, before, start, start, end, end, limit + 1,
+        )
+        val page = rows.take(limit)
+        obj("entries" to page, "nextCursor" to if (rows.size > limit) page.last()["id"].toString() else null)
     }
 }
