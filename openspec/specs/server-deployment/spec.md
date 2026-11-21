@@ -61,3 +61,10 @@ Al recibir la señal de terminación, el servidor SHALL dejar de aceptar conexio
 #### Scenario: docker stop
 - **WHEN** se detiene el contenedor
 - **THEN** el proceso cierra los sockets y sale antes del período de gracia
+
+### Requirement: Configuración del panel
+El servidor SHALL configurarse con `PANEL_ENABLED` (verdadero por defecto) y `PANEL_PORT` (5443 por defecto); `compose.yaml` SHALL publicar ese puerto y `compose.local.yaml` solo en `127.0.0.1`.
+
+#### Scenario: Entorno local
+- **WHEN** se levanta `compose.local.yaml`
+- **THEN** el panel responde en `https://127.0.0.1:5443` y no en otras interfaces
