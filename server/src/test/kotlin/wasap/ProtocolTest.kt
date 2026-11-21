@@ -62,4 +62,15 @@ class ProtocolTest {
         assertFails { Pins.hash("123") }
         assertFails { Pins.hash("abcdef") }
     }
+
+    @Test fun `capacity settings reject nonpositive and noninteger values`() {
+        for ((name, fallback) in mapOf("DB_POOL_SIZE" to DEFAULT_DB_POOL_SIZE, "MAX_CONNECTIONS" to DEFAULT_MAX_CONNECTIONS)) {
+            assertEquals(fallback, positiveSetting(name, null, fallback))
+            assertEquals(16, positiveSetting(name, " 16 ", fallback))
+            for (raw in listOf("0", "-2", "2.5", "abc", "9999999999")) {
+                val error = assertFailsWith<ApiError> { positiveSetting(name, raw, fallback) }
+                assertTrue(error.message.orEmpty().contains(name))
+            }
+        }
+    }
 }

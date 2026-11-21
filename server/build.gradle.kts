@@ -27,12 +27,20 @@ kotlin { jvmToolchain(25) }
 // Formatting rules live in the repository .editorconfig.
 ktlint { version = "1.8.0" }
 application { mainClass.set("wasap.MainKt") }
-tasks.test { useJUnitPlatform { excludeTags("integration") } }
+tasks.test { useJUnitPlatform { excludeTags("integration", "load") } }
 tasks.register<Test>("integrationTest") {
     description = "Runs against an explicitly supplied disposable PostgreSQL database."
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform { includeTags("integration") }
     shouldRunAfter(tasks.test)
+}
+tasks.register<Test>("loadTest") {
+    description = "Measures a local TLS server over a disposable PostgreSQL schema."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("load") }
+    testLogging.showStandardStreams = true
+    outputs.upToDateWhen { false }
 }
 tasks.jar { manifest { attributes["Main-Class"] = "wasap.MainKt" } }

@@ -9,7 +9,7 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.time.OffsetDateTime
 
-class Database(url: String, user: String, password: String, schema: String = "public", allowInsecure: Boolean = false) : AutoCloseable {
+class Database(url: String, user: String, password: String, schema: String = "public", allowInsecure: Boolean = false, poolSize: Int = DEFAULT_DB_POOL_SIZE) : AutoCloseable {
     private val pool: HikariDataSource
     init {
         require(schema.matches(Regex("[a-z][a-z0-9_]{0,62}")))
@@ -20,7 +20,7 @@ class Database(url: String, user: String, password: String, schema: String = "pu
                 jdbcUrl = url
                 username = user
                 this.password = password
-                maximumPoolSize = 5
+                maximumPoolSize = poolSize
                 minimumIdle = 1
                 connectionTimeout = 10000
                 validationTimeout = 3000

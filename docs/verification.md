@@ -161,16 +161,53 @@ conectados simultáneamente.
 | Pendiente           | Qué falta comprobar o construir                                           |
 | ------------------- | ------------------------------------------------------------------------- |
 | Operación pendiente | Capturar el reloj y recuperación tras cortar la conexión durante el envío |
-| Integrantes         | Revisar esa pantalla y sus acciones en dispositivo                        |
-| Accesibilidad       | Repetir los nuevos estados con fuente ampliada y navegación asistida      |
-| iPhone              | Compilación en macOS y pruebas reales de navegación, TLS y red local      |
+| Accesibilidad       | Probar los flujos de la v2 con fuente ampliada y navegación asistida      |
+| iPhone              | Vincular un equipo de Apple Developer a EAS, registrar iPhone y probar la build ad hoc |
 | Tema oscuro         | Habilitar integración nativa, recompilar y revisar ambos temas            |
-| Icono y arranque    | Sustituir los recursos predeterminados y verificar el binario             |
-| Dos dispositivos    | Comprobar entrega simultánea y recuperación                               |
+| QR en cámara física | Escanear códigos de servidor e invitación con un teléfono                 |
+| Dos dispositivos    | Comprobar entrega simultánea y recuperación tras cortar Wi-Fi             |
 | TLS negativo        | CA incorrecta, expiración y SAN incorrecto en dispositivo                 |
 
 No se han añadido confirmaciones de lectura, presencia, notificaciones push,
 adjuntos ni nuevas mutaciones offline.
+
+## Línea base de carga
+
+En un Intel Core i5-1155G7 (8 hilos lógicos, 15 GiB de RAM), con JVM 25 y
+PostgreSQL 17.12 en el mismo equipo, se midieron 100 conexiones TLS autenticadas
+con el límite original de 256 conexiones y pool de 5. Durante dos segundos se
+programaron 50 asistencias y 5 mensajes de General por segundo.
+
+| Conexiones | Asistencia p95 | Chat p95 | Entrega en 2 s por mensaje |
+| ---------- | -------------- | -------- | -------------------------- |
+| 100        | 26.68 ms       | 53.10 ms | 100 de 100 como mínimo     |
+
+PostgreSQL conservó 100 movimientos y 10 mensajes después de repetir una
+solicitud de cada tipo con su UUID original. La ejecución registró cero
+respuestas de error.
+
+## Escenario de 2,000 conexiones
+
+En el mismo equipo, con pool de 20 y límite de 2,500, el chat General dejó de
+consultar membresía por cada destinatario. La autenticación de sesiones se
+mantuvo y las conversaciones privadas y grupales conservan su comprobación
+de membresía antes de escribir al socket.
+
+| Conexiones | Ventana | Asistencia p95 | Chat p95 | Entrega en 2 s por mensaje |
+| ---------- | ------- | -------------- | -------- | -------------------------- |
+| 2,000      | 40 s    | 34.80 ms       | 18.20 ms | 2,000 de 2,000             |
+
+Se confirmaron 2,000 movimientos y 200 mensajes, sin respuestas de error ni
+filas duplicadas al repetir dos operaciones. Al finalizar, el cierre de los
+sockets interrumpió revalidaciones de sesión en curso y generó avisos JDBC.
+Esta medición se hizo con el generador, el servidor y PostgreSQL en el mismo
+equipo. Falta repetirla en el hardware de referencia de 4 vCPU y 8 GiB de RAM.
+
+En PostgreSQL temporal se comprobó con `EXPLAIN ANALYZE` que las búsquedas
+de historial de chat, asistencia individual y sesión usan los índices
+`messages_conversation_id_seq_key`, `attendance_user_seq` y `sessions_pkey`.
+El conjunto sintético incluyó 20,000 mensajes, 40,000 movimientos y 2,000
+sesiones. Las tres consultas tardaron menos de 0.2 ms en esa ejecución.
 
 ## Repetir las comprobaciones
 

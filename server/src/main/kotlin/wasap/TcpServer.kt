@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.*
 
 private data class Pending(val frame: JsonObject, val userId: String?, val conversationId: String?)
+// The General conversation is seeded by V1 and has no membership list.
+private const val GENERAL_CONVERSATION_ID = "00000000-0000-4000-8000-000000000001"
 
 class TcpServer(
     private val service: Service,
@@ -23,6 +25,7 @@ class TcpServer(
     private val links: EnrollmentLinks? = null,
     /** Shared with the web panel so both count failed PINs together. */
     internal val limiter: LoginLimiter = LoginLimiter(),
+    maxConnections: Int = DEFAULT_MAX_CONNECTIONS,
 ) : AutoCloseable {
     companion object {
         /** Protocol versions this server accepts; announced in server.hello. */
@@ -37,7 +40,7 @@ class TcpServer(
     private val running = AtomicBoolean(false)
     private val workers = Executors.newVirtualThreadPerTaskExecutor()
     private val clients = ConcurrentHashMap.newKeySet<Client>()
-    private val permits = Semaphore(256)
+    private val permits = Semaphore(maxConnections)
     private val pinWorkers = Semaphore(4)
     private val writeTimers = Executors.newSingleThreadScheduledExecutor()
 
@@ -113,7 +116,8 @@ class TcpServer(
             pending.userId == null ||
                 (
                     authenticated().user.id == pending.userId &&
-                        (pending.conversationId == null || service.canAccess(pending.userId, pending.conversationId))
+                        (pending.conversationId == null || pending.conversationId == GENERAL_CONVERSATION_ID ||
+                            service.canAccess(pending.userId, pending.conversationId))
                     )
         } catch (_: Exception) {
             false
@@ -312,7 +316,7 @@ class TcpServer(
                 else -> null
             }
             val conversationId = if (type == "messages.send") result["message"]!!.jsonObject.string("conversationId") else null
-            // ponytail: per-socket permission queries suit a small LAN; batch membership for larger deployments.
+            // Group and private frames still check membership when each recipient's writer sends them.
             clients.forEach { client ->
                 val recipient = client.cachedUserId() ?: return@forEach
                 if (recipients == null || recipient in recipients) client.send(frame, recipient, conversationId)

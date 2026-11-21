@@ -11,6 +11,8 @@ import javax.net.ssl.SSLSocket
 
 private fun env(name: String, fallback: String? = null): String = System.getenv(name)?.takeIf { it.isNotBlank() }
     ?: fallback ?: error("Set $name")
+internal const val DEFAULT_DB_POOL_SIZE = 20
+internal const val DEFAULT_MAX_CONNECTIONS = 2500
 private fun secret(name: String): String = System.getenv("${name}_FILE")?.let { Files.readString(Path.of(it)).trimEnd() } ?: env(name)
 private fun readPin(): String {
     val console = System.console()
@@ -179,8 +181,11 @@ fun main(args: Array<String>) {
             return
         }
         // Validate serve-only settings before touching the database.
-        val retention = if (args.firstOrNull() in setOf("admin", "certs")) 0 else retentionDays(System.getenv("PROCESSED_REQUEST_RETENTION_DAYS"))
-        Database(env("DB_URL"), env("DB_USER"), secret("DB_PASSWORD"), env("DB_SCHEMA", "public"), env("DB_ALLOW_INSECURE", "false") == "true").use { db ->
+        val serving = args.isEmpty() || args.toList() == listOf("serve")
+        val retention = if (serving) retentionDays(System.getenv("PROCESSED_REQUEST_RETENTION_DAYS")) else 0
+        val poolSize = positiveSetting("DB_POOL_SIZE", System.getenv("DB_POOL_SIZE"), DEFAULT_DB_POOL_SIZE)
+        val maxConnections = if (serving) positiveSetting("MAX_CONNECTIONS", System.getenv("MAX_CONNECTIONS"), DEFAULT_MAX_CONNECTIONS) else DEFAULT_MAX_CONNECTIONS
+        Database(env("DB_URL"), env("DB_USER"), secret("DB_PASSWORD"), env("DB_SCHEMA", "public"), env("DB_ALLOW_INSECURE", "false") == "true", poolSize).use { db ->
             val service = Service(db, ZoneId.of(env("APP_TIMEZONE", "America/Mexico_City")))
             if (args.firstOrNull() == "certs") {
                 serverQr(service, args.drop(2))
@@ -257,7 +262,7 @@ fun main(args: Array<String>) {
                     ?: System.getenv("TLS_CA_FILE")?.let { Tls.readCertificate(Path.of(it)) }
                 val links = ca?.let { EnrollmentLinks({ ServerQr.defaultHosts(serverTls.keystore, serverTls.password).map { h -> ServerQr.address(h, env("SERVER_PUBLIC_PORT", env("SERVER_PORT", "5050")).toInt()) } }, it, service::serverIdentity) }
                 val limiter = LoginLimiter()
-                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca, links, limiter)
+                val server = TcpServer(service, db, context, env("SERVER_HOST", "0.0.0.0"), env("SERVER_PORT", "5050").toInt(), sessions, ca, links, limiter, maxConnections)
                 // The admin panel: HTTPS on its own port with the same reloadable certificate.
                 val panel = if (panelEnabled(System.getenv("PANEL_ENABLED"))) {
                     val certificates = if (Files.exists(tls.caCertificate)) {

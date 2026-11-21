@@ -264,6 +264,20 @@ cd ..
 docker compose -f compose.test.yaml down
 ```
 
+Con la misma base desechable encendida y las variables `WASAP_TEST_DB_*`
+configuradas, ejecuta `./gradlew loadTest` desde `server/` para medir el chat
+general y la asistencia sobre conexiones TLS reales. Por defecto mide 100
+clientes durante 2 segundos. Para el escenario escolar ejecuta
+`LOAD_CONNECTIONS=2000 LOAD_SECONDS=40 ./gradlew loadTest`. Puedes ajustar
+`LOAD_ATTENDANCE_RATE` (50 por segundo) y `LOAD_MESSAGE_RATE` (5 por segundo).
+El informe incluye p95 de confirmación, cobertura de entrega en dos segundos
+y verificación de filas persistidas tras reintentos.
+
+`DB_POOL_SIZE` (20) y `MAX_CONNECTIONS` (2,500) configuran el tamaño máximo del
+pool de PostgreSQL y el límite de conexiones TCP del proceso. Usa enteros
+positivos. Las cifras de capacidad comprobada están en
+[la evidencia de verificación](docs/verification.md).
+
 El PostgreSQL de pruebas es efímero y solo se publica en localhost. No uses una base
 de producción para pruebas. OpenSSL es necesario para la prueba de sockets TLS.
 `DB_ALLOW_INSECURE=true` existe exclusivamente para desarrollo/pruebas locales.
