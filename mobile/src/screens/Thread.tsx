@@ -182,7 +182,7 @@ export function Thread({id}: {id: string}) {
           ) : undefined
         }
         ListEmptyComponent={
-          <View style={{transform: [{scaleY: -1}], flex: 1, justifyContent: 'center'}}>
+          <View style={{flex: 1, justifyContent: 'center'}}>
             <Empty
               icon="chats"
               title="Aún no hay mensajes"
