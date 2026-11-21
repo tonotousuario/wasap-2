@@ -8,7 +8,14 @@ export type Route =
   | {name: 'members'; id: string}
   | {name: 'newChat'}
   | {name: 'newGroup'}
-  | {name: 'server'};
+  | {name: 'classReport'; id: string}
+  | {name: 'server'}
+  | {name: 'serverAddress'}
+  | {name: 'scan'}
+  | {name: 'pasteLink'}
+  | {name: 'enroll'; text: string}
+  | {name: 'redeem'; code: string}
+  | {name: 'signup'; code?: string; className?: string};
 export type Navigation = {
   push(route: Route): void;
   pop(): void;

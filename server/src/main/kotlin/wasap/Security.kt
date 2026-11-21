@@ -40,11 +40,15 @@ object Pins {
     }
 }
 
-data class User(val id: String, val matricula: String, val name: String) {
+data class User(val id: String, val matricula: String, val name: String, val role: String = "student") {
     var credentialVersion: Int = 1
-    fun toJson() = obj("id" to id, "matricula" to matricula, "name" to name)
+    fun toJson() = obj("id" to id, "matricula" to matricula, "name" to name, "role" to role)
 }
-class Session(val token: String, val user: User, val expiresAt: Instant, val credentialVersion: Int, validatedAt: Long) {
+class Session(val token: String, user: User, val expiresAt: Instant, val credentialVersion: Int, validatedAt: Long) {
+    /** Refreshed with the current role on every revalidation. */
+    @Volatile var user: User = user
+        internal set
+
     /** Lookup key: SHA-256 of the token, also the database primary key. */
     val hash: String = tokenHash(token)
 
@@ -114,11 +118,13 @@ class Sessions(
         synchronized(session) {
             val now = clock()
             if (!force && now - session.validatedAt < revalidateAfterNanos) return session
-            if (!store.isValid(session.hash, session.credentialVersion)) {
+            val role = store.currentRole(session.hash, session.credentialVersion)
+            if (role == null) {
                 cache.remove(session.hash, session)
                 store.delete(session.hash)
                 throw ApiError("UNAUTHENTICATED", "Tu sesión terminó; inicia sesión nuevamente")
             }
+            if (role != session.user.role) session.user = session.user.copy(role = role)
             session.validatedAt = now
         }
         return session

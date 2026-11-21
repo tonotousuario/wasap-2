@@ -422,6 +422,8 @@ export function NewGroup() {
   const directory = useDirectory();
   const [name, setName] = useState('');
   const [chosen, setChosen] = useState<User[]>([]);
+  const [asClass, setAsClass] = useState(false);
+  const canTeach = state.session?.user.role === 'teacher' || state.session?.user.role === 'admin';
   const [creating, setCreating] = useState(false);
   const [problem, setProblem] = useState('');
   const locked = !state.online || state.busy || state.pending;
@@ -434,10 +436,10 @@ export function NewGroup() {
     setCreating(true);
     setProblem('');
     try {
-      const result = await engine.mutate('groups.create', {
-        name: name.trim(),
-        matriculas: chosen.map(user => user.matricula),
-      });
+      const matriculas = chosen.map(user => user.matricula);
+      const result = asClass
+        ? await engine.createClass(name.trim(), matriculas)
+        : await engine.mutate('groups.create', {name: name.trim(), matriculas});
       nav.replace({name: 'thread', id: result.conversation.id});
     } catch {
       // El nombre y la selección se conservan para reintentar.
@@ -454,7 +456,7 @@ export function NewGroup() {
   return (
     <View style={{flex: 1, backgroundColor: c.bg}}>
       <TopBar
-        title="Crear grupo"
+        title={asClass ? 'Crear clase' : 'Crear grupo'}
         subtitle={chosen.length ? `${chosen.length + 1} integrantes contigo` : 'Elige a sus integrantes'}
         onBack={nav.pop}
       />
@@ -465,8 +467,18 @@ export function NewGroup() {
         contentContainerStyle={{paddingBottom: space.xl}}
         ListHeaderComponent={
           <View style={{padding: space.lg, gap: space.md}}>
+            {canTeach && (
+              <View
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Tipo"
+                style={{flexDirection: 'row', gap: space.sm}}
+              >
+                <Chip label="Grupo" selected={!asClass} onPress={() => setAsClass(false)} />
+                <Chip label="Clase con asistencia" selected={asClass} onPress={() => setAsClass(true)} />
+              </View>
+            )}
             <Field
-              label="Nombre del grupo"
+              label={asClass ? 'Nombre de la clase' : 'Nombre del grupo'}
               value={name}
               onChangeText={setName}
               autoCapitalize="sentences"
@@ -502,7 +514,9 @@ export function NewGroup() {
             )}
             <SearchField query={directory.query} setQuery={directory.setQuery} />
             <Text style={[type.small, {color: c.textSoft}]}>
-              Tú creas el grupo y siempre formas parte de él. Solo tú podrás añadir o quitar integrantes.
+              {asClass
+                ? 'Eres responsable de la clase: sus integrantes registran asistencia en ella y tú ves la lista.'
+                : 'Tú creas el grupo y siempre formas parte de él. Solo tú podrás añadir o quitar integrantes.'}
             </Text>
           </View>
         }
@@ -569,7 +583,9 @@ export function NewGroup() {
         <Button
           icon="group"
           label={
-            creating ? 'Creando…' : chosen.length ? `Crear grupo con ${chosen.length + 1} integrantes` : 'Crear grupo'
+            creating
+              ? 'Creando…'
+              : `Crear ${asClass ? 'clase' : 'grupo'}${chosen.length ? ` con ${chosen.length + 1} integrantes` : ''}`
           }
           loading={creating}
           disabled={locked || !name.trim()}

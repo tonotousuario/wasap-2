@@ -1,9 +1,20 @@
-export type User = {id: string; matricula: string; name: string};
+export type Role = 'admin' | 'teacher' | 'student';
+export type User = {id: string; matricula: string; name: string; role?: Role};
 export type Session = {token: string; expiresAt: string; user: User};
-export type AttendanceEvent = {id: string; seq: string; type: 'ENTRY' | 'EXIT'; recordedAt: string};
+export type AttendanceEvent = {
+  id: string;
+  seq: string;
+  type: 'ENTRY' | 'EXIT';
+  recordedAt: string;
+  classId?: string | null;
+};
+/** A movement in a class report: who and in which class. */
+export type ReportEvent = AttendanceEvent & {matricula: string; name: string; className?: string | null};
 export type AttendanceState = {
   lastEvent: AttendanceEvent | null;
   nextType: 'ENTRY' | 'EXIT';
+  /** null (or absent on older servers) = the general door. */
+  classId?: string | null;
   timezone?: string;
   today?: string;
 };
@@ -13,8 +24,11 @@ export type Conversation = {
   name: string;
   ownerId: string | null;
   lastSeq: string;
+  /** A group with its own attendance (servers with classes). */
+  isClass?: boolean;
   peer?: User;
 };
+export type ClassInfo = Conversation & {isOwner: boolean};
 export type Message = {
   id: string;
   conversationId: string;

@@ -4,6 +4,9 @@ Wasap es un proyecto académico de redes: registra entrada/salida y ofrece
 mensajería general, privada y de grupo. El servidor JVM decide la identidad,
 el orden de los registros y cuándo una operación queda confirmada.
 
+La app puede guardar varias instalaciones y mantiene sus sesiones separadas.
+El intercambio entre servidores se describe en el [diseño de federación](federation.md).
+
 ## Componentes
 
 ```mermaid

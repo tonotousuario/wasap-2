@@ -31,9 +31,14 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:5050:5050"
+      - "127.0.0.1:${PANEL_PORT:-5443}:${PANEL_PORT:-5443}/tcp"
     environment:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 5050
+      PANEL_ENABLED: "${PANEL_ENABLED:-true}"
+      PANEL_PORT: ${PANEL_PORT:-5443}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      MAX_CONNECTIONS: ${MAX_CONNECTIONS:-2500}
       APP_TIMEZONE: America/Mexico_City
       DB_URL: jdbc:postgresql://db:5432/wasap?sslmode=disable
       DB_USER: wasap
@@ -42,12 +47,14 @@ services:
       TLS_KEYSTORE: /run/wasap/server.p12
       TLS_KEYSTORE_PASSWORD_FILE: /run/wasap/keystore-password
       TLS_CA_FILE: /run/wasap/ca.crt
+      TLS_DIR: /var/lib/wasap/tls
       JAVA_OPTS: -Xms64m -Xmx256m
     volumes:
       - ./certs/db-password:/run/wasap/db-password:ro,z
       - ./certs/server.p12:/run/wasap/server.p12:ro,z
       - ./certs/keystore-password:/run/wasap/keystore-password:ro,z
       - ./certs/ca.crt:/run/wasap/ca.crt:ro,z
+      - ./certs/tls:/var/lib/wasap/tls:z
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777

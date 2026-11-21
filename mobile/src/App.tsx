@@ -14,7 +14,9 @@ import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-contex
 import {engine} from './native';
 import {explainError, LINK_LABEL, linkState, pendingLabel} from './format';
 import {Login, ServerScreen} from './screens/Access';
-import {Attendance} from './screens/Attendance';
+import {EnrollServer, PasteLink, ScanServer, Servers} from './screens/Servers';
+import {Redeem, Signup} from './screens/Onboarding';
+import {Attendance, ClassReport} from './screens/Attendance';
 import {Chats, NewChat, NewGroup} from './screens/Chats';
 import {Settings} from './screens/Settings';
 import {Members, Thread} from './screens/Thread';
@@ -28,6 +30,17 @@ const TABS: {id: Tab; label: string; icon: IconName; iconOn: IconName; title: st
   {id: 'chats', label: 'Chats', icon: 'chats', iconOn: 'chatsOn', title: 'Chats'},
   {id: 'settings', label: 'Ajustes', icon: 'settings', iconOn: 'settingsOn', title: 'Ajustes'},
 ];
+
+/** Screens about servers stay open when the session changes underneath them. */
+const SERVER_ROUTES = new Set<Route['name']>([
+  'server',
+  'serverAddress',
+  'scan',
+  'pasteLink',
+  'enroll',
+  'redeem',
+  'signup',
+]);
 
 export default function App() {
   return (
@@ -83,11 +96,11 @@ function Root() {
   useEffect(() => {
     forgetLocalData();
     setNotice('');
-    setStack(routes => routes.filter(route => route.name === 'server'));
+    setStack(routes => routes.filter(route => SERVER_ROUTES.has(route.name)));
     if (!userId) setTab('attendance');
   }, [userId]);
   useEffect(() => {
-    if (!signedIn) setStack(routes => routes.filter(route => route.name === 'server'));
+    if (!signedIn) setStack(routes => routes.filter(route => SERVER_ROUTES.has(route.name)));
   }, [signedIn]);
 
   const nav = useMemo<Navigation>(
@@ -136,7 +149,19 @@ function Root() {
       </View>
     );
   } else if (top?.name === 'server') {
+    screen = <Servers />;
+  } else if (top?.name === 'serverAddress') {
     screen = <ServerScreen />;
+  } else if (top?.name === 'scan') {
+    screen = <ScanServer />;
+  } else if (top?.name === 'pasteLink') {
+    screen = <PasteLink />;
+  } else if (top?.name === 'enroll') {
+    screen = <EnrollServer key={top.text} text={top.text} />;
+  } else if (top?.name === 'redeem') {
+    screen = <Redeem code={top.code} />;
+  } else if (top?.name === 'signup') {
+    screen = <Signup code={top.code} className={top.className} />;
   } else if (!signedIn) {
     screen = <Login />;
   } else if (top?.name === 'thread') {
@@ -147,6 +172,8 @@ function Root() {
     screen = <NewChat />;
   } else if (top?.name === 'newGroup') {
     screen = <NewGroup />;
+  } else if (top?.name === 'classReport') {
+    screen = <ClassReport key={top.id} id={top.id} />;
   } else {
     screen = <Tabs tab={tab} setTab={setTab} notice={notice} clearNotice={() => setNotice('')} />;
   }

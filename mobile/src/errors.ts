@@ -1,6 +1,6 @@
 // Fallos de conexión con un tipo estable para que la interfaz no dependa del
 // texto técnico del sistema operativo.
-export type ConnectKind = 'unreachable' | 'tls' | 'closed' | 'offline' | 'config';
+export type ConnectKind = 'unreachable' | 'tls' | 'closed' | 'offline' | 'config' | 'identity';
 export class ConnectError extends Error {
   kind: ConnectKind;
   detail: string;

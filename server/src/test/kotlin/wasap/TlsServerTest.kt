@@ -37,7 +37,7 @@ class TlsServerTest {
             }
             val soon = Tls.expiryWarning(Tls.earliestExpiry(keystore(10), "secreto"))
             assertNotNull(soon)
-            assertTrue(soon.contains("expires on") && soon.contains("create-certs.sh"), soon)
+            assertTrue(soon.contains("expires on") && soon.contains("certs issue"), soon)
             assertNull(Tls.expiryWarning(Tls.earliestExpiry(keystore(200), "secreto")))
         } finally {
             dir.toFile().deleteRecursively()

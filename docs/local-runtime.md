@@ -57,8 +57,9 @@ flowchart LR
 ```
 
 La base no publica puertos al anfitrión. El servidor aplica las migraciones
-(Flyway) antes de escuchar y solo se publica en `127.0.0.1:5050`; para teléfonos en
-la LAN usa `compose.yaml`, que publica el puerto en todas las interfaces.
+(Flyway) antes de escuchar. Compose local publica la app en `127.0.0.1:5050` y el
+panel en `127.0.0.1:5443`; para dispositivos en la LAN, `compose.yaml` publica los
+puertos en las interfaces del anfitrión.
 
 ## PostgreSQL y servidor con Compose (recomendado)
 
@@ -102,8 +103,17 @@ podman compose -f compose.local.yaml -f compose.local.podman.yaml down
 El volumen externo `wasap-local-pgdata` persiste al bajar Compose. No ejecutes los
 contenedores manuales al mismo tiempo. La base no publica ningún puerto al host;
 el servidor espera su healthcheck y aplica las migraciones automáticamente.
-El único puerto publicado es `127.0.0.1:5050`; usa `adb reverse tcp:5050 tcp:5050`
-y configura `127.0.0.1:5050` en el emulador.
+Usa `adb reverse tcp:5050 tcp:5050` y configura `127.0.0.1:5050` en el emulador.
+Para abrir el panel en `https://127.0.0.1:5443`, el certificado debe cubrir
+`127.0.0.1` y el navegador debe confiar en la CA pública de la instalación.
+Puedes verificar HTTPS desde el equipo anfitrión con:
+
+```bash
+curl --fail --cacert certs/ca.crt https://127.0.0.1:5443/login
+```
+
+El panel usa `PANEL_PORT` (5443 por defecto). Con `PANEL_ENABLED=false` el servidor
+deja de atender en ese puerto. La app mantiene su conexión en `5050`.
 
 ### Entorno nuevo con Docker
 

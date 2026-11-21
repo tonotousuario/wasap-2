@@ -232,4 +232,16 @@ class ServiceTest {
         assertEquals(listOf(obj("id" to b.id, "matricula" to "B001", "name" to "Beto")), found, "only id, matricula and name")
         assertEquals(listOf("C001"), call(a, "users.list", obj("query" to "c00"))["users"]!!.jsonArray.map { it.jsonObject.string("matricula") })
     }
+
+    @Test fun `server identity is stable across restarts and can be renamed`() {
+        val first = service.serverIdentity()
+        assertEquals("Wasap", first.name)
+        UUID.fromString(first.id)
+        // A new Service over the same database simulates a restart.
+        assertEquals(first, Service(db).serverIdentity())
+        val renamed = service.renameServer("  Redes 5.º A  ")
+        assertEquals(first.id, renamed.id)
+        assertEquals("Redes 5.º A", Service(db).serverIdentity().name)
+        assertEquals("VALIDATION", assertFailsWith<ApiError> { service.renameServer(" ") }.code)
+    }
 }

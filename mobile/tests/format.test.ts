@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {classifyConnectFailure, ConnectError, errorCode} from '../src/errors.ts';
 import {ProtocolError} from '../src/state.ts';
 import {
+  initials,
   canSearchDirectory,
   clock,
   pendingLabel,
@@ -182,4 +183,15 @@ test('pending summary counts queued messages and names other operations', () => 
   assert.equal(pendingLabel(1, 'messages.send'), '1 mensaje esperando confirmación');
   assert.equal(pendingLabel(3, 'messages.send'), '3 mensajes esperando confirmación');
   assert.equal(pendingLabel(1, 'attendance.mark'), 'Una operación esperando confirmación');
+});
+
+test('initials skip parenthesised suffixes and words without letters', () => {
+  assert.equal(initials('Usuario de prueba (tú)'), 'UP');
+  assert.equal(initials('Usuario de prueba'), 'UP');
+  assert.equal(initials('Ana'), 'A');
+  assert.equal(initials('Profa. Rivera 3.º'), 'PR');
+  assert.equal(initials('  ñandú  Óscar '), 'ÑÓ');
+  assert.equal(initials('(tú)'), '?');
+  assert.equal(initials('123 456'), '?');
+  assert.equal(initials(''), '?');
 });

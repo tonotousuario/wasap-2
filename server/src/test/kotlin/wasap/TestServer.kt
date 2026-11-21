@@ -18,9 +18,12 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
     private val dbPassword = System.getenv("WASAP_TEST_DB_PASSWORD") ?: "wasap_test"
     private val schema = "test_" + UUID.randomUUID().toString().replace("-", "")
     val certs: Path = Files.createTempDirectory("wasap-tls-test")
+    private val clientTls by lazy { Tls.clientContext(certs.resolve("ca.crt")) }
     val db: Database
     val service: Service
     lateinit var server: TcpServer
+        private set
+    lateinit var tls: ReloadableServerTls
         private set
 
     init {
@@ -32,13 +35,16 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
 
     private fun start(port: Int) {
         val storePassword = Files.readString(certs.resolve("keystore-password")).trim()
+        tls = ReloadableServerTls(certs.resolve("server.p12"), storePassword)
         server = TcpServer(
             service,
             db,
-            Tls.serverContext(certs.resolve("server.p12"), storePassword),
+            tls.context,
             "127.0.0.1",
             port,
             Sessions(DatabaseSessionStore(db), clock),
+            Tls.readCertificate(certs.resolve("ca.crt")),
+            EnrollmentLinks({ listOf("127.0.0.1:${server.port}") }, Tls.readCertificate(certs.resolve("ca.crt")), service::serverIdentity),
         )
         server.start()
     }
@@ -51,13 +57,18 @@ class TestServer(private val clock: () -> Long = System::nanoTime) : AutoCloseab
     }
 
     fun connect(receiveBuffer: Int? = null): Client {
-        val socket = Tls.clientContext(certs.resolve("ca.crt")).socketFactory.createSocket() as SSLSocket
+        val socket = clientTls.socketFactory.createSocket() as SSLSocket
         receiveBuffer?.let { socket.receiveBufferSize = it }
-        socket.connect(InetSocketAddress("127.0.0.1", server.port), 5000)
-        socket.soTimeout = 5000
-        socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
-        socket.startHandshake()
-        return Client(socket)
+        try {
+            socket.connect(InetSocketAddress("127.0.0.1", server.port), 5000)
+            socket.soTimeout = 5000
+            socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+            socket.startHandshake()
+            return Client(socket)
+        } catch (e: Exception) {
+            socket.close()
+            throw e
+        }
     }
 
     override fun close() {

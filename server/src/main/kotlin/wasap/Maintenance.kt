@@ -6,9 +6,13 @@ import java.util.concurrent.TimeUnit
 
 /** Parses PROCESSED_REQUEST_RETENTION_DAYS: an integer of at least 1 day, 30 by default. */
 fun retentionDays(raw: String?): Int {
-    if (raw.isNullOrBlank()) return 30
+    return positiveSetting("PROCESSED_REQUEST_RETENTION_DAYS", raw, 30)
+}
+
+internal fun positiveSetting(name: String, raw: String?, default: Int): Int {
+    if (raw.isNullOrBlank()) return default
     return raw.trim().toIntOrNull()?.takeIf { it >= 1 }
-        ?: throw ApiError("VALIDATION", "PROCESSED_REQUEST_RETENTION_DAYS debe ser un entero mayor o igual a 1")
+        ?: throw ApiError("VALIDATION", "$name debe ser un entero mayor o igual a 1")
 }
 
 /** Background housekeeping for the running server. Failures are logged without details. */

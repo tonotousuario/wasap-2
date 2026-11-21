@@ -3,11 +3,11 @@ import {FrameRow, Rise, SlideShell} from '../components';
 import {color, font, frameBytes} from '../theme';
 
 const NEXT = [
-	{t: 'Repetir la prueba completa con la imagen Docker final', op: 'docker compose up --build -d'},
-	{t: 'Generar el APK de Android en un equipo con más memoria', op: './gradlew :app:assembleDebug'},
-	{t: 'Compilar y firmar la app de iPhone en macOS con Xcode', op: 'npx expo prebuild --platform ios'},
-	{t: 'Correr la lista de pruebas TLS en teléfonos físicos', op: 'mobile/README.md'},
-	{t: 'Resolver el aviso de npm audit sin bajar a Expo 52', op: 'GHSA-g3hv-75wg-m249'},
+	{t: 'Preparar el servidor para el piloto en la red del aula', op: 'docs/local-runtime.md'},
+	{t: 'Probar QR, chat y reconexión con dos teléfonos', op: 'mobile/README.md'},
+	{t: 'Generar e instalar la alpha ad hoc de iPhone', op: 'EAS · perfil preview'},
+	{t: 'Verificar TLS y permisos de red en hardware real', op: 'mobile/README.md'},
+	{t: 'Repetir la prueba de 2 000 conexiones en el equipo de referencia', op: '4 vCPU · 8 GiB de RAM'},
 ];
 
 export const Siguientes: React.FC = () => (

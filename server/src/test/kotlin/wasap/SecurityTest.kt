@@ -25,9 +25,9 @@ class SecurityTest {
             return surplus
         }
         override fun find(hash: String) = rows[hash]?.takeIf { it.credentialVersion == currentVersion }
-        override fun isValid(hash: String, credentialVersion: Int): Boolean {
+        override fun currentRole(hash: String, credentialVersion: Int): String? {
             validityChecks++
-            return rows[hash] != null && credentialVersion == currentVersion
+            return rows[hash]?.takeIf { credentialVersion == currentVersion }?.user?.role
         }
         override fun delete(hash: String) {
             rows.remove(hash)

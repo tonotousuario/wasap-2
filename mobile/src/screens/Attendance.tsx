@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {RefreshControl, ScrollView, Text, View} from 'react-native';
 import {engine} from '../native';
 import {
@@ -11,11 +11,25 @@ import {
   maskDate,
   momentLabel,
   pendingLabel,
+  presetRange,
   type RangePreset,
 } from '../format';
-import type {AttendanceEvent} from '../types';
-import {run, useEngine} from '../ui/app';
-import {Button, Chip, Empty, Field, Icon, Notice, SectionTitle, SkeletonRows, Seal, type IconName} from '../ui/kit';
+import type {AttendanceEvent, ReportEvent} from '../types';
+import type {SignupRequest} from '../engine';
+import {run, useEngine, useNav} from '../ui/app';
+import {
+  Button,
+  Chip,
+  Empty,
+  Field,
+  Icon,
+  Notice,
+  SectionTitle,
+  SkeletonRows,
+  Seal,
+  TopBar,
+  type IconName,
+} from '../ui/kit';
 import {radius, space, type, useTheme} from '../ui/theme';
 
 const NAME = {ENTRY: 'Entrada', EXIT: 'Salida'} as const;
@@ -32,6 +46,9 @@ export function Attendance() {
   const last = attendance?.lastEvent ?? null;
   const next = attendance?.nextType;
   const awaitingMark = state.pending && state.pendingType === 'attendance.mark';
+  const nav = useNav();
+  const selectedClass = state.classes.find(item => item.id === state.attendanceClassId) ?? null;
+  const canReport = !!selectedClass && (selectedClass.isOwner || state.session?.user.role === 'admin');
 
   const mark = async () => {
     setOutcome(null);
@@ -92,9 +109,35 @@ export function Attendance() {
         />
       }
     >
+      {!!state.classes.length && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Dónde registrar"
+          contentContainerStyle={{gap: space.sm, paddingRight: space.lg}}
+          style={{marginHorizontal: -space.lg, paddingLeft: space.lg}}
+        >
+          <Chip
+            label="General"
+            selected={!state.attendanceClassId}
+            disabled={!state.online || marking}
+            onPress={() => run(engine.selectAttendanceClass(null))}
+          />
+          {state.classes.map(item => (
+            <Chip
+              key={item.id}
+              label={item.name}
+              selected={state.attendanceClassId === item.id}
+              disabled={!state.online || marking}
+              onPress={() => run(engine.selectAttendanceClass(item.id))}
+            />
+          ))}
+        </ScrollView>
+      )}
       <View
         accessible
-        accessibilityLabel={`Estado: ${hero.word}. ${hero.line}`}
+        accessibilityLabel={`Estado${selectedClass ? ` en ${selectedClass.name}` : ''}: ${hero.word}. ${hero.line}`}
         style={{
           backgroundColor: heroBg,
           borderRadius: 20,
@@ -109,6 +152,9 @@ export function Attendance() {
           {confirmedInside ? <Seal size={36} /> : <Icon name={hero.icon} size={36} color={heroFg} />}
           <Text style={[type.display, {color: heroFg, flexShrink: 1}]}>{hero.word}</Text>
         </View>
+        {!!selectedClass && (
+          <Text style={[type.small, {color: heroSoft, fontWeight: '600'}]}>Clase · {selectedClass.name}</Text>
+        )}
         <Text style={[type.body, {color: heroSoft}]}>{hero.line}</Text>
         {!!last && (
           <Text style={[type.caption, {color: heroSoft}]}>Hora del servidor. Tu estado continúa de un día a otro.</Text>
@@ -147,6 +193,15 @@ export function Attendance() {
           {!!blocked && <Text style={[type.small, {color: c.textSoft, textAlign: 'center'}]}>{blocked}</Text>}
           {!attendance && state.online && !state.busy && (
             <Button variant="text" icon="refresh" label="Consultar mi estado" onPress={() => run(engine.refresh())} />
+          )}
+          {canReport && (
+            <Button
+              variant="tonal"
+              icon="attendance"
+              label="Lista de la clase"
+              disabled={!state.online}
+              onPress={() => nav.push({name: 'classReport', id: selectedClass!.id})}
+            />
           )}
         </View>
       )}
@@ -365,6 +420,275 @@ function History() {
           disabled={!canLoad}
           onPress={() => void load(engine.loadAttendance(true))}
         />
+      )}
+    </View>
+  );
+}
+
+const REPORT_PRESETS: {id: RangePreset; label: string}[] = [
+  {id: 'today', label: 'Hoy'},
+  {id: 'week', label: '7 días'},
+  {id: 'month', label: 'Este mes'},
+  {id: 'all', label: 'Todo'},
+];
+
+/** Movements of every member of a class, for its teacher or an admin. */
+export function ClassReport({id}: {id: string}) {
+  const state = useEngine();
+  const nav = useNav();
+  const {c} = useTheme();
+  const info = state.classes.find(item => item.id === id);
+  const now = state.attendance?.today ?? new Date();
+  const timezone = state.attendance?.timezone;
+  const [preset, setPreset] = useState<RangePreset>('today');
+  const [events, setEvents] = useState<ReportEvent[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [problem, setProblem] = useState('');
+
+  const load = async (older: boolean, range = presetRange(preset, now)) => {
+    setLoading(true);
+    setProblem('');
+    try {
+      const page = await engine.classReport(id, range, older ? cursor : null);
+      setEvents(list => (older ? [...list, ...page.events] : page.events));
+      setCursor(page.nextCursor);
+    } catch (error) {
+      engine.report(error);
+      setProblem(explainError(engine.state.errorCode, engine.state.error).body);
+      engine.clearError();
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  const pick = (next: RangePreset) => {
+    setPreset(next);
+    setEvents([]);
+    void load(false, presetRange(next, now));
+  };
+  const inside = new Set<string>();
+  const seen = new Set<string>();
+  // Newest first: the first movement seen per student is their current state.
+  for (const event of events) {
+    if (seen.has(event.matricula)) continue;
+    seen.add(event.matricula);
+    if (event.type === 'ENTRY') inside.add(event.matricula);
+  }
+  const groups = groupByDay(events, event => event.recordedAt, timezone);
+
+  return (
+    <View style={{flex: 1, backgroundColor: c.bg}}>
+      <TopBar title="Lista de la clase" subtitle={info?.name} onBack={nav.pop} />
+      <ScrollView contentContainerStyle={{padding: space.lg, paddingBottom: space.xxl, gap: space.md}}>
+        <Enrollment classId={id} />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Periodo de la lista"
+          contentContainerStyle={{gap: space.sm, paddingRight: space.lg}}
+          style={{marginHorizontal: -space.lg, paddingLeft: space.lg}}
+        >
+          {REPORT_PRESETS.map(item => (
+            <Chip
+              key={item.id}
+              label={item.label}
+              selected={preset === item.id}
+              disabled={!state.online || loading}
+              onPress={() => pick(item.id)}
+            />
+          ))}
+        </ScrollView>
+        {!!events.length && (
+          <Text style={[type.body, {color: c.text}]}>
+            {seen.size} {seen.size === 1 ? 'integrante registró' : 'integrantes registraron'} movimientos ·{' '}
+            {inside.size} {inside.size === 1 ? 'sigue dentro' : 'siguen dentro'}
+          </Text>
+        )}
+        {!!problem && <Notice tone="error" title="No se pudo cargar la lista" body={problem} />}
+        {loading && !events.length ? (
+          <SkeletonRows />
+        ) : !groups.length ? (
+          !problem && (
+            <Empty
+              icon="attendance"
+              title="Sin registros en este periodo"
+              body="Cuando tus estudiantes registren entrada o salida en esta clase, aparecerán aquí."
+            />
+          )
+        ) : (
+          groups.map(group => (
+            <View key={group.key} style={{gap: 2}}>
+              <Text
+                accessibilityRole="header"
+                style={[
+                  type.small,
+                  {color: c.textSoft, fontWeight: '600', paddingTop: space.sm, paddingBottom: space.xs},
+                ]}
+              >
+                {dayLabel(group.key, now).replace(/^./, letter => letter.toUpperCase())}
+              </Text>
+              {group.items.map((event, index) => (
+                <View
+                  key={event.id}
+                  accessible
+                  accessibilityLabel={`${event.name}, ${NAME[event.type]} a las ${clock(event.recordedAt, timezone)}`}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.md,
+                    minHeight: 56,
+                    borderTopWidth: index ? 1 : 0,
+                    borderColor: c.line,
+                  }}
+                >
+                  <Icon
+                    name={event.type === 'ENTRY' ? 'enter' : 'exit'}
+                    size={22}
+                    color={event.type === 'ENTRY' ? c.primary : c.textSoft}
+                  />
+                  <View style={{flex: 1}}>
+                    <Text style={[type.body, {color: c.text}]} numberOfLines={1}>
+                      {event.name}
+                    </Text>
+                    <Text style={[type.small, {color: c.textSoft}]}>
+                      {event.matricula} · {NAME[event.type]}
+                    </Text>
+                  </View>
+                  <Text style={[type.body, {color: c.text, fontVariant: ['tabular-nums']}]}>
+                    {clock(event.recordedAt, timezone)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ))
+        )}
+        {!!cursor && (
+          <Button
+            variant="tonal"
+            label="Ver registros anteriores"
+            loading={loading && !!events.length}
+            disabled={!state.online || loading}
+            onPress={() => void load(true)}
+          />
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+/** Teacher tools for a class: its sign-up code and the requests waiting for approval. */
+function Enrollment({classId}: {classId: string}) {
+  const state = useEngine();
+  const {c} = useTheme();
+  const [code, setCode] = useState<string | null>(null);
+  const [requests, setRequests] = useState<SignupRequest[]>([]);
+  const [busy, setBusy] = useState('');
+  const [problem, setProblem] = useState('');
+  const run = async (key: string, task: () => Promise<unknown>) => {
+    setBusy(key);
+    setProblem('');
+    try {
+      await task();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+      engine.clearError();
+    } finally {
+      setBusy('');
+    }
+  };
+  const reload = () => engine.signupRequests(classId).then(setRequests);
+  useEffect(() => {
+    if (!state.online) return;
+    void engine
+      .classCode(classId)
+      .then(result => setCode(result.code))
+      .catch(() => setCode(null));
+    void reload().catch(() => {});
+    // signupVersion: a new request arrived or another device decided one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId, state.online, state.signupVersion]);
+  return (
+    <View style={{gap: space.md, backgroundColor: c.bgAlt, borderRadius: radius.block, padding: space.lg}}>
+      <Text style={[type.small, {color: c.textSoft, fontWeight: '600'}]}>Código de autorregistro</Text>
+      <View style={{flexDirection: 'row', alignItems: 'center', gap: space.md}}>
+        <Text
+          selectable
+          accessibilityLabel={code ? `Código ${code.split('').join(' ')}` : 'Sin código'}
+          style={{
+            flex: 1,
+            fontSize: 30,
+            fontWeight: '700',
+            letterSpacing: 4,
+            color: c.text,
+            fontVariant: ['tabular-nums'],
+          }}
+        >
+          {code ?? '— — — —'}
+        </Text>
+        <Button
+          variant="text"
+          icon="refresh"
+          label="Renovar"
+          loading={busy === 'renew'}
+          disabled={!state.online || !!busy}
+          onPress={() => void run('renew', async () => setCode((await engine.classCode(classId, true)).code))}
+        />
+      </View>
+      <Text style={[type.small, {color: c.textSoft}]}>
+        Díctalo o escríbelo en el pizarrón: con él, tus estudiantes piden entrar desde «Soy nuevo». Renovarlo invalida
+        el anterior.
+      </Text>
+      {!!problem && <Notice tone="error" title="No se pudo" body={problem} onClose={() => setProblem('')} />}
+      {!!requests.length && (
+        <View style={{gap: space.sm, paddingTop: space.sm}}>
+          <Text accessibilityRole="header" style={[type.small, {color: c.textSoft, fontWeight: '600'}]}>
+            {requests.length === 1 ? '1 solicitud pendiente' : `${requests.length} solicitudes pendientes`}
+          </Text>
+          {requests.map(request => (
+            <View
+              key={request.matricula}
+              style={{gap: space.xs, borderTopWidth: 1, borderColor: c.line, paddingTop: space.sm}}
+            >
+              <Text style={[type.body, {color: c.text}]}>{request.name}</Text>
+              <Text style={[type.small, {color: c.textSoft}]}>{request.matricula}</Text>
+              <View style={{flexDirection: 'row', gap: space.sm}}>
+                <View style={{flex: 1}}>
+                  <Button
+                    variant="tonal"
+                    label="Aprobar"
+                    loading={busy === 'approve:' + request.matricula}
+                    disabled={!state.online || !!busy}
+                    onPress={() =>
+                      void run('approve:' + request.matricula, async () => {
+                        await engine.decideSignup(request.matricula, true);
+                        await reload();
+                      })
+                    }
+                  />
+                </View>
+                <View style={{flex: 1}}>
+                  <Button
+                    variant="text"
+                    label="Rechazar"
+                    loading={busy === 'reject:' + request.matricula}
+                    disabled={!state.online || !!busy}
+                    onPress={() =>
+                      void run('reject:' + request.matricula, async () => {
+                        await engine.decideSignup(request.matricula, false);
+                        await reload();
+                      })
+                    }
+                  />
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
       )}
     </View>
   );

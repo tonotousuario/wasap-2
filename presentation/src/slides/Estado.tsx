@@ -4,12 +4,12 @@ import {FrameRow, SlideShell, Status, statusLabel, StatusMark} from '../componen
 import {color, ease, font, frameBytes} from '../theme';
 
 const ROWS: {part: string; s: Status; evidence: string}[] = [
-	{part: 'Protocolo y servidor', s: 'verified', evidence: '3 pruebas unitarias y 11 de integración con PostgreSQL y TLS reales'},
-	{part: 'Lógica de la app móvil', s: 'verified', evidence: '25 pruebas de comportamiento y TypeScript sin errores'},
-	{part: 'Cliente de la app → servidor', s: 'verified', evidence: 'Prueba RPC por TLS, sin teléfono: login, reintento, chats y logout'},
-	{part: 'Imagen Docker', s: 'partial', evidence: 'Construida; falta repetir la prueba con la imagen final'},
-	{part: 'Android nativo', s: 'partial', evidence: 'Compila el módulo TLS parcheado; aún sin APK completo'},
-	{part: 'iOS nativo', s: 'pending', evidence: 'Requiere macOS con Xcode'},
+	{part: 'Protocolo y servidor', s: 'verified', evidence: 'Pruebas de sesiones, chat y asistencia con PostgreSQL y TLS reales'},
+	{part: 'Lógica de la app móvil', s: 'verified', evidence: '76 pruebas y TypeScript sin errores. Clases, invitaciones y varios servidores'},
+	{part: 'Carga del servidor', s: 'verified', evidence: '2 000 conexiones TLS, 2 000 asistencias y 200 mensajes en 40 s'},
+	{part: 'Panel HTTPS', s: 'verified', evidence: 'Acceso de administración y profesores en Chrome con Compose local'},
+	{part: 'Android nativo', s: 'verified', evidence: 'APK de alpha firmado y probado en emulador'},
+	{part: 'iOS nativo', s: 'pending', evidence: 'Build ad hoc con EAS y prueba en iPhone registrado'},
 	{part: 'TLS en teléfono físico', s: 'pending', evidence: 'CA incorrecta, certificado vencido, SAN, red local'},
 ];
 
@@ -42,7 +42,7 @@ export const Estado: React.FC = () => {
 				})}
 				<FrameRow at={104}>
 					<div style={{paddingTop: 24, fontSize: 26, color: color.inkSoft}}>
-						Fuente: docs/progress.md y docs/mobile-report.md. Sin compilaciones en la nube ni publicación en tiendas.
+						Evidencia de compilación y pruebas en docs/verification.md.
 					</div>
 				</FrameRow>
 			</div>

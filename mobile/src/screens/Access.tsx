@@ -3,6 +3,7 @@ import {Alert, Pressable, ScrollView, Text, TextInput, View} from 'react-native'
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {engine} from '../native';
 import {explainError} from '../format';
+import {splitAddress} from '../enrollment';
 import {run, useEngine, useNav} from '../ui/app';
 import {Button, Field, Icon, Notice, TopBar} from '../ui/kit';
 import {space, type, useTheme} from '../ui/theme';
@@ -28,6 +29,8 @@ export function Login() {
   const failure =
     state.error && state.errorCode !== 'UNAUTHENTICATED' ? explainError(state.errorCode, state.error) : null;
   const connectionFailure = state.errorCode.startsWith('CONNECT_');
+  const active = state.servers.find(server => server.id === state.activeServerId);
+  if (!active) return <Welcome />;
   return (
     <ScrollView
       style={{flex: 1, backgroundColor: c.bg}}
@@ -110,12 +113,18 @@ export function Login() {
           onPress={login}
           hint={!ready && !state.busy ? 'Escribe tu matrícula y un PIN de 6 a 12 dígitos' : undefined}
         />
+        <Button
+          variant="text"
+          label="Soy nuevo: tengo un código de clase"
+          disabled={state.busy}
+          onPress={() => nav.push({name: 'signup'})}
+        />
       </View>
 
       <View style={{flex: 1}} />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Servidor ${state.server.host}, puerto ${state.server.port}. Cambiar servidor`}
+        accessibilityLabel={`Servidor ${active?.name ?? ''}, ${state.server.host}, puerto ${state.server.port}. Cambiar servidor`}
         disabled={state.busy}
         onPress={() => nav.push({name: 'server'})}
         android_ripple={{color: c.line}}
@@ -133,7 +142,10 @@ export function Login() {
         <Icon name="server" color={c.textSoft} />
         <View style={{flex: 1}}>
           <Text style={[type.caption, {color: c.textSoft}]}>Te conectarás a</Text>
-          <Text style={[type.body, {color: c.text, fontWeight: '500'}]}>
+          <Text style={[type.body, {color: c.text, fontWeight: '500'}]} numberOfLines={1}>
+            {active?.name ?? 'Servidor'}
+          </Text>
+          <Text style={[type.small, {color: c.textSoft}]}>
             {state.server.host}:{state.server.port}
           </Text>
         </View>
@@ -143,13 +155,58 @@ export function Login() {
   );
 }
 
+/** First run without servers: the only way in is a server's QR (or its link). */
+function Welcome() {
+  const nav = useNav();
+  const {c} = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <ScrollView
+      style={{flex: 1, backgroundColor: c.bg}}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingTop: insets.top + space.xxl,
+        paddingBottom: insets.bottom + space.xl,
+        paddingHorizontal: space.xl,
+        gap: space.xl,
+      }}
+    >
+      <View style={{gap: space.sm}}>
+        <Text
+          accessibilityRole="header"
+          style={{fontSize: 40, lineHeight: 46, fontWeight: '800', letterSpacing: 0.2, color: c.primary}}
+        >
+          Wasap
+        </Text>
+        <Text style={[type.body, {color: c.textSoft}]}>
+          Para empezar, escanea el código QR del servidor de tu grupo. Te lo muestra tu profesor o quien lo administra.
+        </Text>
+      </View>
+      <View style={{flex: 1}} />
+      <View style={{gap: space.sm}}>
+        <Button large icon="qr" label="Escanear código QR" onPress={() => nav.push({name: 'scan'})} />
+        <Button
+          variant="tonal"
+          icon="paste"
+          label="Pegar enlace del servidor"
+          onPress={() => nav.push({name: 'pasteLink'})}
+        />
+      </View>
+    </ScrollView>
+  );
+}
+
+/** Address of the hand-configurable installation server. */
 export function ServerScreen() {
   const state = useEngine();
   const nav = useNav();
   const {c} = useTheme();
   const insets = useSafeAreaInsets();
-  const [host, setHost] = useState(state.server.host);
-  const [port, setPort] = useState(String(state.server.port));
+  const manual = state.servers.find(server => server.manual);
+  const current = (manual && splitAddress(manual.addresses[0] ?? '')) || state.server;
+  const isActive = manual?.id === state.activeServerId;
+  const [host, setHost] = useState(current.host);
+  const [port, setPort] = useState(String(current.port));
   const [problem, setProblem] = useState('');
   const [saving, setSaving] = useState(false);
   const portRef = useRef<React.ComponentRef<typeof TextInput>>(null);
@@ -157,7 +214,8 @@ export function ServerScreen() {
     .trim()
     .replace(/^\[|\]$/g, '')
     .toLowerCase();
-  const changed = cleanHost !== state.server.host || Number(port) !== state.server.port;
+  const changed = cleanHost !== current.host || Number(port) !== current.port;
+  const signedIn = !!manual && state.signedIn.includes(manual.id);
   const apply = async () => {
     setSaving(true);
     try {
@@ -177,21 +235,21 @@ export function ServerScreen() {
     if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535)
       return setProblem('El puerto debe ser un número entre 1 y 65535.');
     if (!changed) return nav.pop();
-    if (!state.session && !state.pending) return void apply();
-    const consequences = [`Se cerrará la sesión de ${state.session?.user.name ?? 'tu cuenta'} en este teléfono.`];
-    if (state.pending)
+    if (!signedIn) return void apply();
+    const consequences = [`Se cerrará tu sesión en «${manual?.name ?? 'este servidor'}» en este teléfono.`];
+    if (isActive && state.pending)
       consequences.push(
         'Hay una operación sin confirmar: se descartará y no sabrás desde aquí si el servidor anterior la registró.',
       );
     consequences.push('Tendrás que volver a entrar en el nuevo servidor.');
-    Alert.alert('¿Cambiar de servidor?', consequences.join('\n\n'), [
+    Alert.alert('¿Cambiar la dirección?', consequences.join('\n\n'), [
       {text: 'Cancelar', style: 'cancel'},
-      {text: 'Cambiar servidor', style: 'destructive', onPress: () => void apply()},
+      {text: 'Cambiar dirección', style: 'destructive', onPress: () => void apply()},
     ]);
   };
   return (
     <View style={{flex: 1, backgroundColor: c.bg}}>
-      <TopBar title="Servidor" onBack={nav.pop} />
+      <TopBar title="Dirección del servidor" subtitle={manual?.name} onBack={nav.pop} />
       <ScrollView
         contentContainerStyle={{padding: space.xl, paddingBottom: insets.bottom + space.xl, gap: space.lg}}
         keyboardShouldPersistTaps="handled"
@@ -221,7 +279,7 @@ export function ServerScreen() {
           help="5050 si nadie te indicó otro."
         />
         {!!problem && <Notice tone="error" title="No se pudo guardar" body={problem} />}
-        {!!state.session && changed && (
+        {signedIn && changed && (
           <Notice
             tone="warn"
             icon="alert"
@@ -233,7 +291,7 @@ export function ServerScreen() {
             }
           />
         )}
-        <Button label="Guardar servidor" loading={saving} disabled={state.busy} onPress={save} />
+        <Button label="Guardar dirección" loading={saving} disabled={state.busy || !manual} onPress={save} />
         <View style={{flexDirection: 'row', gap: space.md, paddingTop: space.sm}}>
           <Icon name="lock" size={20} color={c.textSoft} />
           <Text style={[type.small, {color: c.textSoft, flex: 1}]}>

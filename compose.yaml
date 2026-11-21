@@ -7,9 +7,14 @@ services:
     restart: unless-stopped
     ports:
       - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}/tcp"
+      - "${PANEL_PORT:-5443}:${PANEL_PORT:-5443}/tcp"
     environment:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: ${SERVER_PORT:-5050}
+      PANEL_ENABLED: "${PANEL_ENABLED:-true}"
+      PANEL_PORT: ${PANEL_PORT:-5443}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      MAX_CONNECTIONS: ${MAX_CONNECTIONS:-2500}
       APP_TIMEZONE: ${APP_TIMEZONE:-America/Mexico_City}
       PROCESSED_REQUEST_RETENTION_DAYS: ${PROCESSED_REQUEST_RETENTION_DAYS:-30}
       DB_URL: ${DB_URL:?Set DB_URL with sslmode=verify-full}
@@ -18,12 +23,16 @@ services:
       TLS_KEYSTORE: /run/wasap/server.p12
       TLS_KEYSTORE_PASSWORD_FILE: /run/secrets/keystore_password
       TLS_CA_FILE: /run/wasap/ca.crt
+      # Writable: encrypted CA key and certificates issued by `certs issue` or the panel.
+      TLS_DIR: /var/lib/wasap/tls
+      SERVER_PUBLIC_ADDRESSES: ${SERVER_PUBLIC_ADDRESSES:-}
     secrets:
       - db_password
       - keystore_password
     volumes:
       - ./certs/server.p12:/run/wasap/server.p12:ro
       - ./certs/ca.crt:/run/wasap/ca.crt:ro
+      - ./certs/tls:/var/lib/wasap/tls
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777

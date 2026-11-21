@@ -53,6 +53,10 @@ const ICONS = {
   unselected: ['checkbox-blank-circle-outline', 'ellipse-outline'],
   lock: ['lock-outline', 'lock-closed-outline'],
   calendar: ['calendar-range', 'calendar-outline'],
+  qr: ['qrcode-scan', 'qr-code-outline'],
+  paste: ['content-paste', 'clipboard-outline'],
+  trash: ['delete-outline', 'trash-outline'],
+  edit: ['pencil-outline', 'create-outline'],
 } as const;
 export type IconName = keyof typeof ICONS;
 

@@ -55,7 +55,7 @@ Los eventos SHALL tener `kind:"event"`, un `id` UUID nuevo, `type` igual a `mess
 - **THEN** el `id` del evento no coincide con el de ninguna solicitud pendiente del cliente
 
 ### Requirement: Códigos de error
-El conjunto de códigos de error SHALL ser: `VALIDATION`, `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `RATE_LIMITED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `REQUEST_ID_REUSED`, `INTERNAL`, `UNAVAILABLE`, `UNSUPPORTED_VERSION`.
+El conjunto de códigos de error SHALL ser: `VALIDATION`, `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `RATE_LIMITED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `REQUEST_ID_REUSED`, `INTERNAL`, `UNAVAILABLE`, `UNSUPPORTED_VERSION`, `INVITATION_INVALID`, `PENDING_APPROVAL`.
 
 #### Scenario: Código conocido
 - **WHEN** el servidor responde un error
@@ -96,3 +96,21 @@ Los valores de secuencia SHALL viajar como cadenas decimales y los instantes com
 #### Scenario: Secuencia grande
 - **WHEN** un mensaje tiene una secuencia mayor que 2^53
 - **THEN** el cliente la recibe como cadena sin pérdida de precisión
+
+### Requirement: Identidad del servidor
+La operación `server.hello` SHALL responder sin sesión `{serverId, name, protocolVersions, caFingerprint}`: un UUID que no cambia entre reinicios, el nombre configurado, las versiones de protocolo aceptadas y la huella SHA-256 (hex) del certificado de la CA.
+
+#### Scenario: Mismo ID tras reiniciar
+- **WHEN** un cliente pide `server.hello` antes y después de reiniciar el servidor
+- **THEN** recibe el mismo `serverId` y la misma `caFingerprint`
+
+#### Scenario: Sin sesión
+- **WHEN** un socket sin autenticar envía `server.hello`
+- **THEN** recibe la identidad del servidor y no cuenta como intento de login
+
+### Requirement: Versiones de protocolo anunciadas
+El servidor SHALL aceptar solicitudes cuyo `v` esté en `protocolVersions` y responder `UNSUPPORTED_VERSION` con `payload.supportedVersions` para cualquier otra.
+
+#### Scenario: Versión futura
+- **WHEN** un cliente envía una solicitud con `v:2` a un servidor que solo acepta 1
+- **THEN** recibe `UNSUPPORTED_VERSION` con `supportedVersions:[1]`
