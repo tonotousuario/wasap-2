@@ -41,16 +41,11 @@ async function toggleFullscreen() {
 }
 
 function selectReceipt(index) {
-  const states = [
-    ['clock', 'Pendiente'],
-    ['check', 'Enviado'],
-    ['double-check', 'Visto por alguien'],
-  ];
-  const [icon, label] = states[index];
+  const button = receiptButtons[index];
   document.querySelector('.message-demo').dataset.state = index;
-  document.querySelector('#receipt-icon').setAttribute('href', `#${icon}`);
-  document.querySelector('#receipt-label').textContent = label;
-  receiptButtons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === index)));
+  document.querySelector('#receipt-icon').setAttribute('href', button.querySelector('use').getAttribute('href'));
+  document.querySelector('#receipt-label').textContent = button.dataset.label;
+  receiptButtons.forEach((item, i) => item.setAttribute('aria-pressed', String(i === index)));
 }
 
 back.addEventListener('click', () => show(current - 1));

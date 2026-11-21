@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
+    "demo:studio": "remotion studio src/demo.tsx",
+    "demo:render": "remotion render src/demo.tsx DemoLAN out/Demo-Wasap.mp4",
     "stills": "node scripts/render.mjs stills",
     "render": "node scripts/render.mjs all"
   },

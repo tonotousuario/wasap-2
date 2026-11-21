@@ -8,6 +8,21 @@ Abre [demo.html](demo.html) en el navegador. Incluye siete diapositivas con capt
 - Pulsa **N** para las notas de la diapositiva. En **Palomitas honestas**, usa los botones o las teclas **1**, **2** y **3**.
 - La presentación usa capturas del repositorio y fuentes locales con licencia OFL en `demo-assets/`. Funciona sin conexión cuando se abre desde una copia del repositorio.
 
+### Versión animada con Remotion
+
+```bash
+npm ci
+npm run demo:studio
+npm run demo:render
+```
+
+La composición `DemoLAN` recorre las siete diapositivas en 49 segundos. En Studio
+también puedes previsualizar cada escena por separado. El render completo se guarda
+en `out/Demo-Wasap.mp4` (1440 × 810, 30 fps, sin audio).
+
+Remotion reutiliza el contenido de `demo.html`, los estilos de `demo.css` y las
+capturas del repositorio. Los tiempos y las animaciones se editan en `src/demo.tsx`.
+
 ## Presentación técnica de avances
 
 Diapositivas animadas hechas con Remotion 4 (1920×1080, 30 fps, 7 s por diapositiva).
