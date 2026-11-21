@@ -201,13 +201,28 @@ Se confirmaron 2,000 movimientos y 200 mensajes, sin respuestas de error ni
 filas duplicadas al repetir dos operaciones. Al finalizar, el cierre de los
 sockets interrumpió revalidaciones de sesión en curso y generó avisos JDBC.
 Esta medición se hizo con el generador, el servidor y PostgreSQL en el mismo
-equipo. Falta repetirla en el hardware de referencia de 4 vCPU y 8 GiB de RAM.
+equipo.
 
 En PostgreSQL temporal se comprobó con `EXPLAIN ANALYZE` que las búsquedas
 de historial de chat, asistencia individual y sesión usan los índices
 `messages_conversation_id_seq_key`, `attendance_user_seq` y `sessions_pkey`.
 El conjunto sintético incluyó 20,000 mensajes, 40,000 movimientos y 2,000
 sesiones. Las tres consultas tardaron menos de 0.2 ms en esa ejecución.
+
+### Repetición con los límites de referencia
+
+Se usaron cuatro CPU lógicas de cuatro núcleos físicos distintos del Intel
+Core i5-1155G7 y un límite compartido de 8 GiB para el generador, la JVM del
+servidor y PostgreSQL 17.12. Se verificaron la afinidad de CPU y el grupo de
+control de PostgreSQL y Java. El pico de memoria del grupo fue de 1.60 GiB.
+
+| Conexiones TLS | Ventana | Asistencia p95 | Chat p95 | Entrega en 2 s por mensaje |
+| -------------- | ------- | -------------- | -------- | -------------------------- |
+| 2,000          | 40 s    | 17.63 ms       | 22.36 ms | 2,000 de 2,000             |
+
+La tarea `loadTest` verificó los umbrales del escenario escolar y contó
+2,000 registros de asistencia y 200 mensajes después de los reintentos.
+La prueba aplicó la migración V8 sin respuestas de error ni filas duplicadas.
 
 ## Repetir las comprobaciones
 

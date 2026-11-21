@@ -79,7 +79,9 @@ class SchoolLoadTest {
                 val replies = CountDownLatch(scheduled.size)
                 val errors = ConcurrentHashMap<String, AtomicInteger>()
                 val replayed = CountDownLatch(2)
+                val replayDelivered = CountDownLatch(connections)
                 val replayIds = setOf(marks.first().id, messages.first().id)
+                val replayText = messages.first().payload.string("text")
                 val replayStarted = java.util.concurrent.atomic.AtomicBoolean()
                 Executors.newVirtualThreadPerTaskExecutor().use { readers ->
                     try {
@@ -106,6 +108,8 @@ class SchoolLoadTest {
                                             val measurement = broadcasts.getValue(text)
                                             if (seen.add(text) && now - measurement.sentAt <= TimeUnit.SECONDS.toNanos(2)) {
                                                 measurement.deliveredWithinTwoSeconds.incrementAndGet()
+                                            } else if (text == replayText && replayStarted.get()) {
+                                                replayDelivered.countDown()
                                             }
                                         }
                                     }
@@ -126,9 +130,17 @@ class SchoolLoadTest {
                         replayStarted.set(true)
                         listOf(marks.first(), messages.first()).forEach { clients[it.client].send(it.type, it.payload, it.id) }
                         assertTrue(replayed.await(5, TimeUnit.SECONDS), "Retried requests were not acknowledged")
-                        println("Attendance p95: ${p95(marks, measurements)} ms; chat p95: ${p95(messages, measurements)} ms")
-                        println("Minimum delivery per message within 2 s: ${broadcasts.values.minOf { it.deliveredWithinTwoSeconds.get() }}/$connections; errors: $errors")
+                        replayDelivered.await(2, TimeUnit.SECONDS)
+                        val attendanceP95 = p95(marks, measurements)
+                        val chatP95 = p95(messages, measurements)
+                        val minDelivery = broadcasts.values.minOf { it.deliveredWithinTwoSeconds.get() }
+                        println("Attendance p95: $attendanceP95 ms; chat p95: $chatP95 ms")
+                        println("Minimum delivery per message within 2 s: $minDelivery/$connections; errors: $errors")
                         assertTrue(errors.isEmpty(), errors.toString())
+                        if (connections == 2000 && attendanceCount == connections && attendanceRate == 50 && messageRate == 5) {
+                            assertTrue(attendanceP95 <= 300 && chatP95 <= 300, "School p95 exceeds 300 ms")
+                            assertTrue(minDelivery >= 1900, "School delivery falls below 95%")
+                        }
                     } finally {
                         clients.forEach { it.close() }
                     }

@@ -2,7 +2,9 @@
 
 ## Context
 
-Tras `harden-server-load-resilience`, cada trama ligada a una conversación verifica permiso con una transacción corta, y cada mensaje del General se encola para todos los clientes; la sesión se revalida cada 5 s. El pool de Hikari tiene 5 conexiones fijas. Motivación en `proposal.md`.
+La línea base tenía un pool de 5 conexiones y un límite fijo de 256 sockets.
+La sesión se revalida cada 5 s. Los mensajes de General se encolan para todos
+los clientes autenticados. Motivación en `proposal.md`.
 
 ## Goals / Non-Goals
 
@@ -13,16 +15,40 @@ Tras `harden-server-load-resilience`, cada trama ligada a una conversación veri
 ## Decisions
 
 ### D1. Caché de membresía para la entrega
-Mapa en memoria `conversationId -> miembros` invalidado en la misma transacción que `groups.add/remove` (callback tras commit). El writer consulta la caché; si falta la entrada, va a la base. La garantía de `event-delivery` se mantiene porque la invalidación ocurre antes de responder a la remoción. Para General no hay consulta: todos los autenticados acceden.
+La migración V8 incrementa la revisión de la conversación en la misma transacción
+que modifica su membresía. Cubre cambios desde la app, el panel, la consola y
+otros procesos que escriben en PostgreSQL. El servidor consulta una revisión
+por evento de chat privado o grupal y carga sus integrantes solo cuando cambia.
+La revisión y los integrantes se leen en una sola consulta. Los 512 conjuntos
+más recientes se conservan en memoria para seleccionar los sockets candidatos.
+
+Cada writer vuelve a autorizar la entrega en PostgreSQL justo antes de escribir.
+Así se mantiene la garantía de `event-delivery` aunque la membresía cambie
+después de seleccionar destinatarios. Para General basta con la sesión
+autenticada.
 
 ### D2. Pool y límites
-`DB_POOL_SIZE` (por defecto 20) y `MAX_CONNECTIONS` (por defecto 2 500, hoy 256 fijo). Los hilos virtuales no limitan; lo hacen el pool y la memoria (≈ 64 KB de búfer por conexión).
+`DB_POOL_SIZE` vale 20 por defecto y `MAX_CONNECTIONS`, 2 500. El pool y la
+memoria disponible limitan cuántas operaciones pueden atenderse a la vez.
 
 ### D3. Interfaz `EventBus`
-`publish(event, audience)` / `subscribe(handler)`. La implementación actual es en memoria. Una implementación `PostgresEventBus` con `LISTEN/NOTIFY` (carga útil ≤ 8 KB, se manda solo el ID y se lee el resto) queda descrita aquí pero no se construye.
+`publish(SocketEvent)` y `subscribe(handler)` conectan los eventos confirmados
+con el enrutamiento a sockets locales. La implementación en memoria entrega
+sincrónicamente al enrutador, y cada socket vacía su propia cola.
+
+Una implementación futura de `PostgresEventBus` usaría una tabla de eventos
+con ID, conversación, destinatarios y contenido. El productor persistiría el
+evento cuando confirma la mutación y usaría `NOTIFY` con solo su ID. Cada
+instancia escucharía el canal en una conexión dedicada, leería el evento por
+ID y lo pasaría al enrutador local conservando la autorización al escribir.
+Un cursor persistente por instancia permitiría recuperar avisos tras perder la
+conexión. Los eventos mantendrían su ID al reintentarse para deduplicarlos.
 
 ### D4. Generador de carga
-Módulo de pruebas Kotlin (`loadTest`, tarea Gradle aparte) con hilos virtuales: crea N usuarios de prueba en un esquema temporal, abre N conexiones TLS, mide con HdrHistogram y comprueba en la base que cada UUID produjo un solo efecto.
+La tarea Gradle `loadTest` crea N usuarios en un esquema temporal, abre N
+conexiones TLS y usa el reloj monotónico para medir confirmaciones y entregas.
+Compara los recuentos en PostgreSQL después de reenviar una operación de cada
+tipo con el mismo UUID.
 
 ## Risks / Trade-offs
 
@@ -31,4 +57,6 @@ Módulo de pruebas Kotlin (`loadTest`, tarea Gradle aparte) con hilos virtuales:
 
 ## Migration Plan
 
-Sin migraciones de datos salvo índices (`CREATE INDEX CONCURRENTLY` documentado si la base ya es grande). Variables nuevas con valores por defecto.
+V8 añade la revisión de membresía con valor inicial cero y activa el trigger
+para las escrituras posteriores. Los grupos existentes se cargan al enviar su
+primer mensaje. El pool y el límite de conexiones conservan valores por defecto.

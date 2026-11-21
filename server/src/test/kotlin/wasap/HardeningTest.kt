@@ -115,6 +115,42 @@ class HardeningTest {
         }
     }
 
+    @Test fun `a warm audience follows membership commits made by another database writer`() {
+        env.connect().use { a ->
+            env.connect().use { b ->
+                val owner = a.login("A001", "123456")["user"]!!.jsonObject.string("id")
+                val member = b.login("B001", "654321")["user"]!!.jsonObject.string("id")
+                val group = a.ok("groups.create", obj("name" to "Redes", "matriculas" to listOf("B001")))["conversation"]!!.jsonObject.string("id")
+                assertEquals(setOf(owner, member), env.service.messageAudience(group))
+                assertEquals(setOf(owner, member), env.service.messageAudience(group))
+
+                assertFailsWith<IllegalStateException> {
+                    env.db.transaction { c ->
+                        c.exec("DELETE FROM conversation_members WHERE conversation_id=?::uuid AND user_id=?::uuid", group, member)
+                        error("rollback")
+                    }
+                }
+                assertEquals(setOf(owner, member), env.service.messageAudience(group))
+                env.db.transaction { c ->
+                    val schema = c.rows("SELECT current_schema() AS schema").single().string("schema")
+                    c.exec("SET LOCAL search_path TO pg_catalog")
+                    c.exec("DELETE FROM $schema.conversation_members WHERE conversation_id=?::uuid AND user_id=?::uuid", group, member)
+                }
+                assertEquals(setOf(owner), env.service.messageAudience(group))
+
+                a.ok("messages.send", obj("conversationId" to group, "text" to "Sin acceso"))
+                a.ok("ping")
+                assertFalse("message.created" in b.drain())
+                b.events.clear()
+
+                env.db.transaction { c -> c.exec("INSERT INTO conversation_members(conversation_id,user_id) VALUES (?::uuid,?::uuid)", group, member) }
+                a.ok("messages.send", obj("conversationId" to group, "text" to "Acceso restaurado"))
+                a.ok("ping")
+                assertTrue("message.created" in b.drain())
+            }
+        }
+    }
+
     @Test fun `conversations changed reaches only affected users`() {
         env.connect().use { a ->
             env.connect().use { b ->
