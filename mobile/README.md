@@ -22,7 +22,9 @@ certificado nuevo con `scripts/create-certs.sh` y la app no necesita reinstalars
 
 ### iPhone (ad-hoc)
 
-La alpha de iPhone solo se instala en dispositivos registrados:
+La alpha de iPhone solo se instala en dispositivos registrados. Para preparar
+la primera build, la cuenta de EAS del proyecto debe tener un equipo de Apple
+Developer asociado. Después se registran los iPhone y se usa el perfil `preview`.
 
 1. Quien publica la alpha ejecuta `npx eas-cli device:create`, que genera un enlace o
    un QR. Ábrelo en Safari en tu iPhone e instala el perfil que registra tu equipo.
@@ -284,7 +286,7 @@ Verificado en el emulador Android (360×640 dp y 411×914 dp, fuente del sistema
 - iOS: el parche activa la comprobación y usa `SecTrustSetAnchorCertificates`, anclas exclusivas, `SecPolicyCreateSSL` con el host/IP configurado y `SecTrustEvaluateWithError`; exige TLS 1.2 o posterior. Sustituye la comparación incorrecta entre certificado de hoja y CA.
 - Android: crea TLS sobre el socket TCP con el host original, activa identificación de extremo `HTTPS`, permite únicamente TLS 1.2/1.3 y usa el TrustManager de la CA. Rechaza opciones de confianza ciega y claves de cliente. Incluye compatibilidad de namespace con AGP moderno.
 - Las mutaciones se escriben primero en AsyncStorage (clave `outbox:<servidor,usuario>`, un arreglo ordenado) y sólo después se envían. Los mensajes forman una cola de hasta 20 que se envía de uno en uno y en orden; asistencia, privados y grupos son exclusivos (solo empiezan con la cola vacía). Lo pendiente se reintenta con el mismo UUID, contenido, servidor y usuario después de reconectar/reiniciar; un error definitivo descarta solo ese mensaje y lo muestra como «No enviado» con acciones para copiarlo o descartarlo. Un pendiente del formato anterior (`pending:`) se migra al abrir la app. No se crean acciones nuevas sin conexión.
-- SecureStore guarda el token y los datos mínimos de sesión; el PIN sólo permanece en memoria durante el inicio de sesión. Cerrar sesión o cambiar de servidor elimina token, pendientes y cachés locales.
+- SecureStore guarda el token y los datos mínimos de sesión; el PIN sólo permanece en memoria durante el inicio de sesión. Cerrar sesión elimina el token y los pendientes de esa sesión. Cambiar de servidor conserva la sesión y la cola del servidor anterior.
 - Los mensajes se deduplican por ID/secuencia, se ordenan sin convertir la secuencia a `number` y se recuperan por cursor en todas las conversaciones al reconectar/reanudar. Los eventos en vivo no adelantan el cursor de recuperación. La pérdida de membresía elimina la conversación de la caché de la app.
 
 ## Verificación en dispositivos físicos
@@ -298,6 +300,7 @@ Estos pasos son necesarios antes de distribuir; exportar JavaScript no verifica 
 5. Quita un usuario de un grupo desde el creador mientras mantiene el chat abierto. Debe desaparecer de su lista y deben fallar las nuevas consultas/envíos. Verifica que el creador no pueda eliminarse a sí mismo.
 6. Cierra sesión o cambia de servidor con un pendiente; entra con otro usuario. No debe reproducirse la operación anterior. Reinicia el servidor: la app debe reconectar sin pedir matrícula ni PIN. Tras `admin users reset-pin` o `admin users logout`, debe pedir login en un máximo de 5 segundos.
 7. Deniega permiso iOS de red local, cambia a una red inaccesible o usa puerto cerrado; comprueba el error y posterior reconexión al restablecer permisos/conectividad. Prueba segundo plano y regreso al primer plano.
+8. Escanea el QR de un servidor desde «Añadir servidor» y el QR de una invitación desde «Soy nuevo». Confirma que la huella coincide con la del servidor y que una invitación de prueba canjeada permite abrir su clase.
 
 ## Comprobaciones automatizadas
 
