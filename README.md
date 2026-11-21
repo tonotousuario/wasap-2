@@ -22,6 +22,10 @@ Capturas reales de la alpha firmada en Android ([más en la verificación](docs/
 | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | <img src="docs/images/wasap-attendance-in.png" alt="Asistencia: Dentro, entrada confirmada por el servidor" width="200"> | <img src="docs/images/wasap-chats.png" alt="Lista de chats: general, grupos y privados" width="200"> | <img src="docs/images/wasap-thread.png" alt="Chat general con mensajes confirmados con una sola palomita" width="200"> | <img src="docs/images/wasap-members.png" alt="Integrantes de un grupo con búsqueda para añadir" width="200"> |
 
+| Panel de administración | Panel de profesores |
+| --- | --- |
+| <img src="docs/images/panel-admin.png" alt="Panel de administración: usuarios, roles y sesiones" width="420"> | <img src="docs/images/panel-teacher.png" alt="Panel de profesores: clase Redes 5A, código de autorregistro y solicitudes" width="420"> |
+
 ## Cómo encaja
 
 ```mermaid
@@ -146,6 +150,23 @@ No incluyas `certs/` ni `.env` en Git.
 Para probar desde Linux sin abrir Android Studio, sigue la [guía para iniciar el emulador por terminal](mobile/README.md#emulador-android-desde-la-terminal-sin-abrir-android-studio), con conexión al servidor local y Metro.
 
 ## Administración
+
+El panel HTTPS está en `https://IP-O-NOMBRE:5443`. Usa una dirección incluida en
+el certificado del servidor e instala la CA pública de la instalación como CA de
+confianza en el equipo que abre el panel. En Compose local, el panel se publica
+en `127.0.0.1`. Configura `PANEL_PORT` para cambiar el puerto y `PANEL_ENABLED=false`
+para desactivar el servicio. La app sigue conectándose por TCP + TLS en su puerto
+propio.
+
+Entra con una matrícula y PIN de `admin` o `teacher`. Para habilitar la primera
+cuenta administradora, crea el usuario por consola y asígnale el rol `admin`:
+
+```bash
+docker compose exec server /app/bin/wasap-server admin users add ADM001 'Administración'
+docker compose exec server /app/bin/wasap-server admin users role ADM001 admin
+```
+
+Puedes seguir administrando el servidor por consola:
 
 ```bash
 docker compose exec server /app/bin/wasap-server admin users add 20260001 'Ana Pérez'

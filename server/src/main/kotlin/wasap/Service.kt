@@ -34,7 +34,7 @@ class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Me
     // ---- Audit log (admin-web-panel) ----
 
     /** Fields allowed in audit details; anything else (PIN, passphrases, codes) is dropped. */
-    private val auditFields = setOf("matricula", "name", "role", "count", "matriculas", "addresses", "dnsNames", "days", "notAfter", "sessions")
+    private val auditFields = setOf("matricula", "name", "role", "count", "matriculas", "addresses", "dnsNames", "days", "notAfter", "sessions", "serial")
 
     /** Records [action] by [actor] (null = console) inside the caller's transaction. */
     internal fun audit(c: Connection, actor: String?, action: String, classId: String? = null, details: Map<String, Any?> = emptyMap()) {

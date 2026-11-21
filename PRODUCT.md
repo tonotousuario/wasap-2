@@ -10,7 +10,7 @@ adaptive
 Estudiantes con matrícula que registran su entrada/salida y se comunican por chat desde Android o iPhone dentro de una LAN; un administrador que da de alta usuarios y consulta asistencia por consola. Audiencia de presentaciones de avance: profesor y grupo de clase (revisión académica).
 
 ## Product Purpose
-Wasap 2 registra asistencia alternada (ENTRY/EXIT, sin reinicio diario) y ofrece chat general, privados y grupos, todo sobre un protocolo propio TCP+TLS sin HTTP. Éxito: cada operación confirmada se registra exactamente una vez, incluso con reintentos, pérdidas de respuesta o reinicios.
+Wasap 2 registra asistencia alternada (ENTRY/EXIT, sin reinicio diario) y ofrece chat general, privados y grupos por un protocolo propio TCP+TLS. La v2 añade un panel HTTPS independiente para administración y profesores. Éxito: cada operación confirmada se registra exactamente una vez, incluso con reintentos, pérdidas de respuesta o reinicios.
 
 ## Positioning
 Protocolo propio con tramas `uint32 longitud | JSON UTF-8` sobre TLS, idempotencia por UUID de solicitud y confirmación solo después del commit en PostgreSQL.

@@ -112,6 +112,7 @@ object CertificateAuthority {
         dnsNames: List<String> = emptyList(),
         days: Long = 365,
         now: Instant = Instant.now(),
+        beforePublish: (IssuedCertificate) -> Unit = {},
     ): IssuedCertificate {
         val ips = (addresses + "127.0.0.1").map(::ipLiteral).distinct()
         val names = dnsNames.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
@@ -139,10 +140,12 @@ object CertificateAuthority {
             load(null, null)
             setKeyEntry("wasap", keys.private, password.toCharArray(), arrayOf(certificate, ca))
         }
+        val issued = IssuedCertificate(serial, notAfter, ips.map { it.hostAddress }, names)
+        beforePublish(issued)
         // Password first, keystore last: a reader that sees the new keystore also sees its password.
         writePrivate(tls.keystorePassword) { Files.writeString(it, password) }
         writePrivate(tls.keystore) { path -> Files.newOutputStream(path).use { store.store(it, password.toCharArray()) } }
-        return IssuedCertificate(serial, notAfter, ips.map { it.hostAddress }, names)
+        return issued
     }
 
     private fun ipLiteral(value: String): InetAddress = try {

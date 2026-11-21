@@ -12,7 +12,7 @@ RUN addgroup -g 10001 wasap && adduser -D -u 10001 -G wasap wasap
 WORKDIR /app
 COPY --from=build --chown=wasap:wasap /src/build/install/wasap-server /app
 USER wasap
-EXPOSE 5050/tcp
+EXPOSE 5050/tcp 5443/tcp
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD ["/app/bin/wasap-server", "healthcheck"]
 ENTRYPOINT ["/app/bin/wasap-server"]
 CMD ["serve"]

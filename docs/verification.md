@@ -1,6 +1,6 @@
 # Evidencia y estado de verificación
 
-Fecha de esta actualización: **14 de noviembre de 2026**.
+Fecha de esta actualización: **20 de noviembre de 2026**.
 
 ## Capturas de la alpha (17 de noviembre de 2026)
 
@@ -126,6 +126,20 @@ APK de release.
   aprobación». La profesora la vio al abrir «Lista de la clase» y la aprobó en la app (el aviso en
   vivo `signup.changed` se comprobó en las pruebas de integración) y AUTO01 entró con su PIN y vio la clase.
 - En ningún momento la consola ni la profesora conocieron los PIN.
+
+## Panel HTTPS en Compose local
+
+Se construyó la imagen del servidor y se levantó con Compose local sobre
+PostgreSQL y certificados de prueba. El puerto `5443` se publicó en `127.0.0.1`
+y una consulta HTTPS validó el certificado con la CA generada para el entorno.
+En Chrome se inició sesión con ambos roles y se abrieron Usuarios y la clase
+«Redes 5A». La solicitud automática de favicon mantuvo la cookie del formulario.
+Con `PANEL_ENABLED=false` el puerto HTTPS dejó de responder y el healthcheck del
+puerto TCP siguió pasando.
+
+| Administración | Profesora |
+| --- | --- |
+| <img src="images/panel-admin.png" alt="Usuarios, roles y sesiones de cuentas de prueba" width="420"> | <img src="images/panel-teacher.png" alt="Clase Redes 5A con código de autorregistro y solicitudes" width="420"> |
 
 ## Comprobaciones realizadas
 

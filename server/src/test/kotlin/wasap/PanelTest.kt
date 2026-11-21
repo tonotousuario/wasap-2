@@ -85,6 +85,15 @@ class PanelTest {
     private fun browser() = Browser(panel.port, env.certs.resolve("ca.crt"))
     private fun panelSessions() = env.db.transaction { c -> c.rows("SELECT 1 FROM panel_sessions") }.size
 
+    @Test fun `the browser favicon request does not refresh the login form cookie`() {
+        val browser = browser()
+        browser.get("/login")
+        val favicon = browser.get("/favicon.ico")
+        assertEquals(204, favicon.statusCode())
+        assertTrue(favicon.headers().allValues("Set-Cookie").isEmpty())
+        assertEquals(303, browser.post("/login", mapOf("matricula" to "ADM", "pin" to "111111")).statusCode())
+    }
+
     @Test fun `every page carries the security headers and only HTTPS answers`() {
         val response = browser().get("/login")
         assertEquals(200, response.statusCode())
@@ -228,7 +237,7 @@ class PanelTest {
             response.body(),
         )
         val door = browser().also { it.login("ADM", "111111") }.get("/attendance.csv?from=2026-11-01&to=2026-11-30").body()
-        assertEquals("﻿matricula,nombre,clase,tipo,instante_local\nA001,Ana,General,Entrada,2026-11-10 09:00:00\n", door)
+        assertEquals("matricula,nombre,clase,tipo,instante_local\nA001,Ana,General,Entrada,2026-11-10 09:00:00\n", door)
         assertEquals(404, browser().also { it.login("PROF1", "222222") }.get("/attendance.csv").statusCode(), "the door is admin only")
     }
 
@@ -271,6 +280,11 @@ class PanelCertificatesTest {
                     assertTrue(admin.get("/server").body().contains("192.168.1.50"), "detected addresses are offered")
                     assertEquals(303, admin.post("/server/certs", mapOf("addresses" to "192.168.1.50\n10.8.0.1", "passphrase" to "frase equivocada!!")).statusCode())
                     assertFalse(leaf().subjectAlternativeNames.any { it[1] == "192.168.1.50" }, "a wrong passphrase issues nothing")
+                    env.db.transaction { it.exec("ALTER TABLE audit_log ADD CONSTRAINT test_audit_unavailable CHECK (action <> 'cert.issue_requested') NOT VALID") }
+                    val blocked = admin.post("/server/certs", mapOf("addresses" to "192.168.1.50", "passphrase" to passphrase))
+                    assertEquals(500, blocked.statusCode())
+                    assertFalse(leaf().subjectAlternativeNames.any { it[1] == "192.168.1.50" }, "an unaudited request issues nothing")
+                    env.db.transaction { it.exec("ALTER TABLE audit_log DROP CONSTRAINT test_audit_unavailable") }
                     val ok = admin.post("/server/certs", mapOf("addresses" to "192.168.1.50\n10.8.0.1", "passphrase" to passphrase))
                     assertTrue(ok.headers().firstValue("Location").get().contains("ok="))
                     assertTrue(leaf().subjectAlternativeNames.any { it[1] == "192.168.1.50" }, "served without restarting")
@@ -278,6 +292,10 @@ class PanelCertificatesTest {
                     assertEquals(1, audit.size)
                     assertTrue(audit.single().string("d").contains("192.168.1.50"))
                     assertFalse(audit.toString().contains(passphrase))
+                    val requestAudit = env.db.transaction { it.rows("SELECT action, details::text AS d FROM audit_log WHERE action='cert.issue_requested'") }
+                    assertEquals(1, requestAudit.size)
+                    assertEquals(audit.single().string("d"), requestAudit.single().string("d"))
+                    assertFalse(requestAudit.toString().contains(passphrase))
                 }
             } finally {
                 dir.toFile().deleteRecursively()

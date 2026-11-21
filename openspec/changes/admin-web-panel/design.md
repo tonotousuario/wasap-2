@@ -23,7 +23,7 @@ Plantillas Kotlin con escape obligatorio (`html { }` propio con funciones que es
 `panel_sessions(token_hash, user_id, created_at, last_seen_at, csrf)` con el mismo esquema de hash que las sesiones de la app; caducidad absoluta de 8 h e inactividad de 30 min. Revalidación de rol con el TTL de 5 s existente.
 
 ### D4. Auditoría
-`audit_log(id, at, actor_id, action, class_id NULL, details jsonb)` escrita en la misma transacción que la acción auditada; `details` pasa por una lista blanca de campos para no guardar secretos.
+`audit_log(id, at, actor_id, action, class_id NULL, details jsonb)` se escribe en la misma transacción que cada mutación de datos. `details` pasa por una lista blanca de campos. Para emitir un certificado, el panel registra la solicitud validada antes de publicar archivos y registra la activación después de recargar el certificado. Ambos eventos incluyen el mismo número de serie. Una solicitud sin evento de activación queda visible para revisión.
 
 ### D5. Emisión de certificados desde el panel
 Formulario con las direcciones detectadas (editable) y la frase de la CA en un campo de contraseña; la frase solo vive durante la petición y no se registra. Tras emitir, la página muestra el QR nuevo.

@@ -174,6 +174,8 @@ class PanelServer(
     private fun route(exchange: HttpExchange): Reply {
         val method = exchange.requestMethod
         val path = exchange.requestURI.path
+        // Browsers fetch this in parallel with the login page. Keep it outside the login redirect.
+        if (method == "GET" && path == "/favicon.ico") return Reply(204, ByteArray(0), "image/x-icon")
         if (method == "GET" && path == "/panel.css") return Reply(200, CSS, "text/css; charset=utf-8")
         if (path == "/login") return if (method == "POST") login(exchange) else loginPage(null)
         val token = cookies(exchange)[COOKIE]
@@ -301,9 +303,14 @@ class PanelServer(
                 val passphrase = form.need("passphrase").toCharArray()
                 try {
                     // The passphrase lives only for this request and is never logged or audited.
-                    val issued = CertificateAuthority.issue(certs.tls, passphrase, addresses, dns)
+                    fun auditCertificate(action: String, issued: IssuedCertificate) = service.audit(
+                        user.id, action, mapOf("addresses" to issued.addresses, "dnsNames" to issued.dnsNames, "notAfter" to issued.notAfter, "serial" to issued.serial.toString(16)),
+                    )
+                    val issued = CertificateAuthority.issue(certs.tls, passphrase, addresses, dns) {
+                        auditCertificate("cert.issue_requested", it)
+                    }
                     certs.afterIssue()
-                    service.audit(user.id, "cert.issue", mapOf("addresses" to issued.addresses, "dnsNames" to issued.dnsNames, "notAfter" to issued.notAfter))
+                    auditCertificate("cert.issue", issued)
                     back("/server", ok = "Certificado emitido hasta ${issued.notAfter}; ya está en uso")
                 } catch (e: ApiError) {
                     back("/server", error = e.message)
@@ -407,7 +414,7 @@ class PanelServer(
 
     private fun csv(name: String, content: String) = Reply(
         200,
-        ("" + content).toByteArray(),
+        content.toByteArray(UTF_8),
         "text/csv; charset=utf-8",
         mapOf("Content-Disposition" to "attachment; filename=\"$name.csv\""),
     )

@@ -13,6 +13,13 @@ El servidor SHALL registrar con autor, fecha, acción y objeto: altas y cambios 
 - **WHEN** un administrador emite un certificado desde el panel
 - **THEN** la auditoría muestra quién, cuándo y las direcciones incluidas, sin la frase
 
+### Requirement: Auditoría previa a la publicación de certificados
+El panel SHALL registrar la solicitud validada con el número de serie, el autor y las direcciones antes de publicar el certificado. El panel SHALL registrar la activación con el mismo número de serie después de la recarga.
+
+#### Scenario: No se puede registrar la solicitud
+- **WHEN** falla el registro de auditoría antes de la publicación
+- **THEN** el panel rechaza la operación y el certificado anterior sigue en uso
+
 ### Requirement: Consulta de la auditoría
 Un `admin` SHALL consultar toda la auditoría y un `teacher` solo las entradas de sus clases, paginadas y filtrables por fecha.
 
