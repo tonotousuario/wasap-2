@@ -26,6 +26,7 @@ class TcpServer(
     /** Shared with the web panel so both count failed PINs together. */
     internal val limiter: LoginLimiter = LoginLimiter(),
     maxConnections: Int = DEFAULT_MAX_CONNECTIONS,
+    private val eventBus: EventBus = InMemoryEventBus(),
 ) : AutoCloseable {
     companion object {
         /** Protocol versions this server accepts; announced in server.hello. */
@@ -43,9 +44,11 @@ class TcpServer(
     private val permits = Semaphore(maxConnections)
     private val pinWorkers = Semaphore(4)
     private val writeTimers = Executors.newSingleThreadScheduledExecutor()
+    private var eventSubscription: AutoCloseable? = null
 
     fun start() {
         check(running.compareAndSet(false, true))
+        eventSubscription = eventBus.subscribe(::deliverEvent)
         workers.submit {
             while (running.get()) {
                 try {
@@ -65,6 +68,7 @@ class TcpServer(
     }
     override fun close() {
         running.set(false)
+        eventSubscription?.close()
         listener.close()
         clients.toList().forEach { it.close() }
         writeTimers.shutdownNow()
@@ -75,9 +79,13 @@ class TcpServer(
     /** Tells the class owner's devices that the pending sign-ups changed. */
     private fun signupChanged(recipients: Set<String>, classId: String) {
         val frame = obj("v" to 1, "kind" to "event", "id" to UUID.randomUUID(), "type" to "signup.changed", "payload" to obj("classId" to classId))
+        eventBus.publish(SocketEvent(frame, recipients))
+    }
+
+    private fun deliverEvent(event: SocketEvent) {
         clients.forEach { client ->
             val recipient = client.cachedUserId() ?: return@forEach
-            if (recipient in recipients) client.send(frame, recipient)
+            if (event.audience == null || recipient in event.audience) client.send(event.frame, recipient, event.conversationId)
         }
     }
 
@@ -309,18 +317,13 @@ class TcpServer(
             }
             val frame = obj("v" to 1, "kind" to "event", "id" to UUID.randomUUID(), "type" to eventType, "payload" to data)
             val sender = session?.user?.id ?: return
-            // null = any authenticated socket; each writer rechecks membership before writing.
+            val conversationId = if (type == "messages.send") result["message"]!!.jsonObject.string("conversationId") else null
             val recipients: Set<String>? = when (eventType) {
                 "attendance.changed" -> setOf(sender)
                 "conversations.changed" -> service.affectedUsers(type, payload, result)
-                else -> null
+                else -> conversationId?.takeUnless { it == GENERAL_CONVERSATION_ID }?.let(service::messageAudience)
             }
-            val conversationId = if (type == "messages.send") result["message"]!!.jsonObject.string("conversationId") else null
-            // Group and private frames still check membership when each recipient's writer sends them.
-            clients.forEach { client ->
-                val recipient = client.cachedUserId() ?: return@forEach
-                if (recipients == null || recipient in recipients) client.send(frame, recipient, conversationId)
-            }
+            eventBus.publish(SocketEvent(frame, recipients, conversationId))
         }
         override fun close() {
             if (closed.compareAndSet(false, true)) {

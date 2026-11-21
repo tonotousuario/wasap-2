@@ -11,6 +11,12 @@ import java.util.UUID
 data class ServerIdentity(val id: String, val name: String)
 
 class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
+    private data class Membership(val revision: String, val users: Set<String>)
+
+    private val audiences = object : LinkedHashMap<String, Membership>(16, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Membership>): Boolean = size > 512
+    }
+
     // Invitation codes are never stored in clear, so invites.create/import are not replayable.
     private val mutations = setOf(
         "attendance.mark", "conversations.direct", "groups.create", "groups.add", "groups.remove", "messages.send",
@@ -155,6 +161,29 @@ class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Me
         }
     } catch (_: ApiError) {
         false
+    }
+
+    /** Routing candidates only. Writers still check live authorization before writing. */
+    internal fun messageAudience(cid: String): Set<String> {
+        val cached = synchronized(audiences) { audiences[cid] }
+        val row = db.transaction { c ->
+            c.rows(
+                """
+                SELECT membership_revision::text AS revision,
+                  (CASE WHEN membership_revision IS DISTINCT FROM ?::bigint
+                    THEN (SELECT coalesce(jsonb_agg(user_id::text), '[]'::jsonb)
+                          FROM conversation_members WHERE conversation_id = k.id)
+                  END)::text AS members
+                FROM conversations k WHERE id = ?::uuid
+                """,
+                cached?.revision, cid,
+            ).singleOrNull()
+        } ?: return emptySet()
+        // Revision and members come from one MVCC snapshot, including changes from another process.
+        val encoded = row.optional("members") ?: return checkNotNull(cached).users
+        val snapshot = Membership(row.string("revision"), Json.parseToJsonElement(encoded).jsonArray.map { it.jsonPrimitive.content }.toSet())
+        synchronized(audiences) { audiences[cid] = snapshot }
+        return snapshot.users
     }
 
     /** Last movement of [uid] in [classId], or at the general door when it is null. */

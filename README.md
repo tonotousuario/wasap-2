@@ -272,6 +272,8 @@ clientes durante 2 segundos. Para el escenario escolar ejecuta
 `LOAD_ATTENDANCE_RATE` (50 por segundo) y `LOAD_MESSAGE_RATE` (5 por segundo).
 El informe incluye p95 de confirmación, cobertura de entrega en dos segundos
 y verificación de filas persistidas tras reintentos.
+El escenario escolar también falla si el p95 supera 300 ms o algún mensaje
+llega a menos del 95 % de los clientes dentro de dos segundos.
 
 `DB_POOL_SIZE` (20) y `MAX_CONNECTIONS` (2,500) configuran el tamaño máximo del
 pool de PostgreSQL y el límite de conexiones TCP del proceso. Usa enteros
