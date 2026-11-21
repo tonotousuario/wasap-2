@@ -88,6 +88,7 @@ export function compareSeq(a: string, b: string) {
   return BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0;
 }
 export function mergeMessages(a: Message[], b: Message[], room: string): Message[] {
+  const confirmedSeen = new Set(b.filter(m => m.conversationId === room && m.seen === true).map(m => m.id));
   const seenId = new Set<string>(),
     seenSeq = new Set<string>();
   return [...a, ...b]
@@ -97,5 +98,6 @@ export function mergeMessages(a: Message[], b: Message[], room: string): Message
       seenSeq.add(m.seq);
       return true;
     })
+    .map(m => (!m.seen && confirmedSeen.has(m.id) ? {...m, seen: true} : m))
     .sort((x, y) => compareSeq(x.seq, y.seq));
 }

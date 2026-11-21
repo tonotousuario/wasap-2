@@ -133,6 +133,7 @@ export class Engine {
   };
   private deps: Dependencies;
   private connection: Connection | null = null;
+  private messageReceipts = false;
   private journal: Outbox | null = null;
   private draining: Promise<void> | null = null;
   private waiters = new Map<string, {resolve: (value: any) => void; reject: (error: unknown) => void}>();
@@ -301,8 +302,9 @@ export class Engine {
         connection.close();
         throw new Error('Conexión cancelada');
       }
+      let messageReceipts: boolean;
       try {
-        await this.verifyIdentity(connection, server);
+        messageReceipts = await this.verifyIdentity(connection, server);
       } catch (error) {
         connection.close();
         throw error;
@@ -312,6 +314,7 @@ export class Engine {
         throw new Error('Conexión cancelada');
       }
       this.connection = connection;
+      this.messageReceipts = messageReceipts;
       const current = this.activeServer();
       if (current && current.lastAddress !== address)
         await this.saveServers(this.state.servers.map(s => (s.id === current.id ? {...s, lastAddress: address} : s)));
@@ -320,12 +323,12 @@ export class Engine {
     throw failure;
   }
   private async verifyIdentity(connection: Connection, server: SavedServer) {
-    let hello: {serverId?: string; name?: string; caFingerprint?: string | null};
+    let hello: {serverId?: string; name?: string; caFingerprint?: string | null; messageReceipts?: boolean};
     try {
       hello = await connection.request('server.hello', {}, this.deps.uuid());
     } catch (error) {
       // v1 servers do not know server.hello; only the hand-configured server may be one.
-      if (server.manual && error instanceof ProtocolError && error.code === 'VALIDATION') return;
+      if (server.manual && error instanceof ProtocolError && error.code === 'VALIDATION') return false;
       throw error;
     }
     const otherServer = () =>
@@ -338,6 +341,7 @@ export class Engine {
     if (server.id === INSTALLATION) {
       if (hello.serverId) await this.adoptServerId(hello.serverId, hello.name);
     } else if (hello.serverId !== server.id) throw otherServer();
+    return hello.messageReceipts === true;
   }
   /** The installation server learned its real id: rename it, keeping its session and scope. */
   private async adoptServerId(serverId: string, name?: string) {
@@ -724,6 +728,29 @@ export class Engine {
   private addMessages(id: string, messages: Message[]) {
     this.update({messages: {...this.state.messages, [id]: mergeMessages(this.state.messages[id] ?? [], messages, id)}});
   }
+  async confirmVisibleMessages(conversationId: string, messageIds: string[]) {
+    if (!this.messageReceipts || !this.state.online || this.state.busy) return;
+    const connection = this.connection;
+    for (let offset = 0; offset < messageIds.length && connection === this.connection; offset += 50) {
+      const {seenIds} = await this.query('messages.seen', {
+        conversationId,
+        messageIds: messageIds.slice(offset, offset + 50),
+      });
+      this.applyMessageReceipts(conversationId, seenIds);
+    }
+  }
+  private applyMessageReceipts(conversationId: string, messageIds: unknown) {
+    const ownId = this.state.session?.user.id;
+    const messages = this.state.messages[conversationId];
+    if (!ownId || !messages || !Array.isArray(messageIds)) return;
+    const ids = new Set(messageIds);
+    const seen = messages.filter(message => message.senderId === ownId && !message.seen && ids.has(message.id));
+    if (seen.length)
+      this.addMessages(
+        conversationId,
+        seen.map(message => ({...message, seen: true})),
+      );
+  }
   async recoverMessages(id: string) {
     let after = this.recovered[id];
     if (after === undefined) {
@@ -760,6 +787,9 @@ export class Engine {
       const message = event.payload.message as Message;
       if (this.state.conversations.some(c => c.id === message.conversationId))
         this.addMessages(message.conversationId, [message]);
+    } else if (event.type === 'message.seen') {
+      const {conversationId, messageIds} = event.payload;
+      if (typeof conversationId === 'string') this.applyMessageReceipts(conversationId, messageIds);
     } else if (event.type === 'attendance.changed') {
       const changed = event.payload as AttendanceState;
       if ((changed.classId ?? null) !== this.state.attendanceClassId) return;

@@ -74,7 +74,17 @@ docker compose -f compose.local.yaml exec server /app/bin/wasap-server certs qr 
 | Inicia sesión con una cuenta distinta en cada teléfono. | Ambos pueden entrar al mismo servidor. |
 | Registra entrada y salida desde el primer teléfono. | Los dos movimientos aparecen en su historial y se pueden verificar exportando el CSV en **Clases → Puerta general** del panel. |
 | Envía un mensaje en el chat general desde el primero y responde desde el segundo. | Ambos ven los dos mensajes. |
+| Envía con el segundo teléfono fuera del chat y luego abre el chat en ese teléfono. | El remitente ve una palomita al enviar y dos con «Visto por alguien» cuando el otro teléfono muestra el mensaje. Ambos APK y el servidor deben admitir confirmaciones. |
 | Corta el Wi‑Fi justo después de tocar Enviar y vuelve a conectarlo. | Si la app alcanzó a poner el mensaje en cola, se resuelve el pendiente y el mensaje aparece una sola vez. |
+
+## 5. Probar la vista del profesor
+
+En el emulador, inicia sesión con una cuenta con rol `teacher`. En **Chats**,
+abre la opción de crear un grupo, selecciona **Clase con asistencia** y añade
+las dos cuentas de prueba. En **Asistencia**, selecciona esa clase y abre
+**Lista de la clase**. Desde un teléfono, selecciona la misma clase y registra
+la entrada. Comprueba que el movimiento aparezca en la lista del profesor con
+la matrícula del estudiante.
 
 ## Si algo falla
 

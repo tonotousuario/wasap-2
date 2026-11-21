@@ -37,6 +37,7 @@ export type Message = {
   senderName: string;
   text: string;
   createdAt: string;
+  seen?: boolean;
 };
 export type Operation = {id: string; type: string; payload: Record<string, unknown>};
 export type Server = {host: string; port: number};

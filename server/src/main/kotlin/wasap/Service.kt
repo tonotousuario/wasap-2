@@ -12,6 +12,7 @@ data class ServerIdentity(val id: String, val name: String)
 
 class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Mexico_City")) {
     private data class Membership(val revision: String, val users: Set<String>)
+    internal data class SeenResult(val ownIds: List<String>, val newByAuthor: Map<String, List<String>>)
 
     private val audiences = object : LinkedHashMap<String, Membership>(16, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Membership>): Boolean = size > 512
@@ -161,6 +162,45 @@ class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Me
         }
     } catch (_: ApiError) {
         false
+    }
+
+    internal fun confirmSeen(uid: String, p: JsonObject): SeenResult {
+        val cid = p.uuid("conversationId")
+        val ids = (p["messageIds"] as? JsonArray)?.takeIf { it.size in 1..50 }
+            ?: invalid("messageIds debe tener entre 1 y 50 elementos")
+        val messageIds = ids.map { value ->
+            uuid((value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: invalid("UUID de mensaje inválido"))
+        }
+        return db.transaction { c ->
+            conversation(c, uid, cid, shared = true)
+            val sqlIds = c.createArrayOf("uuid", messageIds.toTypedArray())
+            try {
+                // Acquire message locks in the same order across overlapping batches.
+                val changed = c.rows(
+                    """
+                    WITH pending AS (
+                        SELECT id FROM messages
+                        WHERE conversation_id=?::uuid AND id=ANY(?) AND sender_id<>?::uuid AND NOT seen
+                        ORDER BY id FOR UPDATE
+                    )
+                    UPDATE messages m SET seen=true FROM pending WHERE m.id=pending.id
+                    RETURNING m.id::text, m.sender_id::text
+                    """,
+                    cid,
+                    sqlIds,
+                    uid,
+                )
+                val own = c.rows(
+                    "SELECT id::text FROM messages WHERE conversation_id=?::uuid AND id=ANY(?) AND sender_id=?::uuid AND seen",
+                    cid,
+                    sqlIds,
+                    uid,
+                )
+                SeenResult(own.map { it.string("id") }, changed.groupBy({ it.string("sender_id") }, { it.string("id") }))
+            } finally {
+                sqlIds.free()
+            }
+        }
     }
 
     /** Routing candidates only. Writers still check live authorization before writing. */
@@ -364,10 +404,11 @@ class Service(private val db: Database, val zone: ZoneId = ZoneId.of("America/Me
             val limit = p.limit()
             val items = c.rows(
                 """
-                SELECT $messageColumns FROM messages m JOIN users u ON u.id=m.sender_id
+                SELECT $messageColumns, (m.sender_id=?::uuid AND m.seen) AS seen FROM messages m JOIN users u ON u.id=m.sender_id
                 WHERE m.conversation_id=?::uuid AND (?::bigint IS NULL OR m.seq < ?::bigint) AND (?::bigint IS NULL OR m.seq > ?::bigint)
                 ORDER BY m.seq ${if (after != null) "ASC" else "DESC"} LIMIT ?
             """,
+                uid,
                 cid,
                 before,
                 before,

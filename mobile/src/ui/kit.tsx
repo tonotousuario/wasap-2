@@ -19,6 +19,7 @@ import {android, radius, space, TOUCH, type, useTheme} from './theme';
 const ICONS = {
   back: ['arrow-left', 'chevron-back'],
   check: ['check', 'checkmark'],
+  checkDouble: ['check-all', 'checkmark-done'],
   pending: ['clock-outline', 'time-outline'],
   enter: ['location-enter', 'enter-outline'],
   exit: ['location-exit', 'exit-outline'],

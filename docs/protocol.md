@@ -7,7 +7,7 @@ Decode UTF-8 only after assembling the complete byte frame; invalid UTF-8 is an 
 Request: `{ "v":1, "kind":"request", "id":"UUID", "type":"auth.login", "payload":{} }`.
 Response reuses `id`, has `kind:"response"`, `type:"success"` and result in `payload`,
 or `type:"error"`, `payload:{code,message}`. Event: `kind:"event"`, fresh UUID `id`,
-`type:"message.created"|"conversations.changed"|"attendance.changed"`, `payload`.
+`type:"message.created"|"message.seen"|"conversations.changed"|"attendance.changed"`, `payload`.
 Malformed framing closes the socket. Semantic errors return an error response.
 A request whose `v` is not supported answers `UNSUPPORTED_VERSION` with
 `payload.supportedVersions` (currently `[1]`); the connection stays open.
@@ -49,7 +49,7 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | Type                           | Payload                                                                            | Success payload                                                                  |
 | ------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | ping                           | `{}`                                                                               | `{ready:true}`                                                                   |
-| server.hello                   | `{}`                                                                               | `{serverId:UUID, name, protocolVersions:[1], caFingerprint}` (no session needed) |
+| server.hello                   | `{}`                                                                               | `{serverId:UUID,name,protocolVersions:[1],caFingerprint,messageReceipts?:true}` (no session needed) |
 | auth.login                     | `{matricula,pin}`                                                                  | `{token,expiresAt,user:{id,matricula,name}}`                                     |
 | auth.resume                    | `{token}`                                                                          | `{token,expiresAt,user:{id,matricula,name}}`                                     |
 | auth.logout                    | `{}`                                                                               | `{}`                                                                             |
@@ -77,6 +77,7 @@ to avoid JavaScript integer overflow. Instants are ISO-8601 UTC strings.
 | groups.remove                  | `{conversationId,matricula}`                                                       | `{}`                                                                             |
 | messages.list                  | `{conversationId,before?:string,after?:string,limit?:number}`                      | `{messages:[Message],nextCursor:string                                           | null}`                              |
 | messages.send                  | `{conversationId,text}`                                                            | `{message:Message}`                                                              |
+| messages.seen                  | `{conversationId,messageIds:UUID[]}` (1–50 IDs)                                      | `{seenIds:UUID[]}` (requested own messages already seen)                           |
 
 `users.list` is a search, never a full directory: `query` is required and must have at
 least 3 Unicode characters (code points) after trimming, otherwise VALIDATION. It
@@ -131,7 +132,12 @@ carry the server QR data plus the code, so scanning one also adds the server.
 user's perspective; it is absent for GENERAL and GROUP. It is returned by
 `conversations.list` and `conversations.direct`. Older stored mutation replies may
 omit it. `groups.members` also accepts a DIRECT conversation owned by the caller.
-`Message={id,conversationId,seq,senderId,senderName,text,createdAt}`.
+`Message={id,conversationId,seq,senderId,senderName,text,createdAt,seen?:boolean}`.
+`seen:true` is sent to the author when at least one other participant's app has
+reported that the message was visible in a foreground thread. Servers that support
+receipts announce `messageReceipts:true` in `server.hello`. The request marks only
+other senders' messages in this conversation, requires access to the thread and
+is idempotent. Opening or fetching history alone creates no receipt.
 Attendance lists are newest first (`before` is exclusive seq); message lists are
 ascending, returning the most recent page when no cursor is provided, older pages
 with `before`, and earliest unseen pages with `after`. Do not send both cursors.
@@ -146,7 +152,12 @@ Message and conversation pages can be shorter than the requested limit to fit th
 always follow nextCursor. Messages contain 1–4000 UTF-16 code units after trimming.
 Groups contain at most 100 current members including their creator.
 
-`message.created` carries `{message:Message}`. `attendance.changed` carries
+`message.created` carries `{message:Message}`. `message.seen` carries
+`{conversationId,messageIds:UUID[]}` after commit and is sent only to the
+authors of those messages who still have access to the thread. The event exposes
+no reader identity. On reconnect, the client can reconcile its visible messages
+from `messages.seen` even if it missed the event.
+`attendance.changed` carries
 `{lastEvent:Event,nextType,timezone?:string,today?:"YYYY-MM-DD"}` only to that user's authenticated sockets.
 `conversations.changed` carries `{}` and means refresh conversation membership/list.
 It is sent only to users affected by the operation: the members of the conversation

@@ -7,7 +7,9 @@
 Wasap pasa lista y deja chatear al grupo desde Android o iPhone dentro de la red
 local. Es una sátira cariñosa del mensajero verde con una regla seria: **la app solo
 muestra lo que el servidor confirmó**. Un reloj es «pendiente», una palomita es
-«guardado por el servidor» y reintentar nunca duplica un registro.
+«enviado» (guardado por el servidor) y dos indican que la app de otro participante
+mostró el mensaje en el chat abierto. En General y grupos se indica «Visto por
+alguien». Reintentar nunca duplica un registro.
 
 - **Asistencia** alternada entrada/salida, sin reinicio diario, con historial propio.
 - **Chat** general, privados y grupos (hasta 100 integrantes), con cola de envío en orden.
@@ -49,6 +51,7 @@ flowchart LR
 
 - [Arquitectura y recorridos](docs/architecture.md): diagramas de componentes, red local, confirmación y estados.
 - [Capturas y verificación](docs/verification.md): imágenes reales de Android, resultados y pendientes.
+- [Presentación de la demo LAN](presentation/demo.html): recorrido con dos teléfonos, el emulador del profesor y el panel web.
 - [Protocolo TCP/TLS](docs/protocol.md): tramas, operaciones, permisos y recuperación.
 - [Entorno local con Compose](docs/local-runtime.md): PostgreSQL persistente y servidor.
 - [Guía móvil](mobile/README.md): emulador por CLI, Android, Xcode y EAS.

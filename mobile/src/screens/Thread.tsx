@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Text, TextInput, View} from 'react-native';
+import {ActivityIndicator, Alert, AppState, FlatList, Pressable, ScrollView, Text, TextInput, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {engine} from '../native';
 import {
@@ -31,6 +31,7 @@ import {
 import {radius, space, type, useTheme} from '../ui/theme';
 
 const LIMIT = 4000;
+const VIEWABILITY = {minimumViewTime: 400, viewAreaCoveragePercentThreshold: 10};
 type Row = {message: Message; own: boolean; startsDay: boolean; startsRun: boolean};
 
 export function Thread({id}: {id: string}) {
@@ -57,6 +58,35 @@ export function Thread({id}: {id: string}) {
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState('');
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const focused = useRef(AppState.currentState === 'active');
+  const [foreground, setForeground] = useState(focused.current);
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
+  const onViewableItemsChanged = useRef(({viewableItems}: {viewableItems: {item: Row}[]}) => {
+    const ids = viewableItems.map(({item}) => item.message.id);
+    setVisibleIds(previous =>
+      previous.length === ids.length && previous.every((id, index) => id === ids[index]) ? previous : ids,
+    );
+  }).current;
+  useEffect(() => {
+    const setFocused = (active: boolean) => {
+      focused.current = active;
+      setForeground(active);
+    };
+    const subscriptions = [
+      AppState.addEventListener('change', next => setFocused(next === 'active')),
+      AppState.addEventListener('blur', () => setFocused(false)),
+      AppState.addEventListener('focus', () => setFocused(AppState.currentState === 'active')),
+    ];
+    return () => subscriptions.forEach(subscription => subscription.remove());
+  }, []);
+  useEffect(() => {
+    if (!conversation || !state.online || state.busy || !foreground || !visibleIds.length) return;
+    const timer = setTimeout(() => {
+      if (focused.current && AppState.currentState === 'active')
+        void engine.confirmVisibleMessages(id, visibleIds).catch(() => {});
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [id, conversation, state.online, state.busy, foreground, visibleIds]);
   const change = (value: string) => {
     setText(value);
     if (value) drafts.set(id, value);
@@ -156,6 +186,8 @@ export function Thread({id}: {id: string}) {
       <FlatList
         inverted
         data={rows}
+        viewabilityConfig={VIEWABILITY}
+        onViewableItemsChanged={onViewableItemsChanged}
         keyExtractor={row => row.message.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -389,6 +421,7 @@ function Bubble({row, showName, now}: {row: Row; showName: boolean; now: Date}) 
   const {c} = useTheme();
   const {message, own, startsDay, startsRun} = row;
   const named = showName && !own && startsRun;
+  const status = message.seen ? (showName ? 'Visto por alguien' : 'Visto') : 'Enviado';
   return (
     <View>
       {startsDay && (
@@ -415,7 +448,7 @@ function Bubble({row, showName, now}: {row: Row; showName: boolean; now: Date}) 
       {/* Propio y recibido se distinguen por lado, esquina, nombre y palomita, no solo por color. */}
       <View
         accessible
-        accessibilityLabel={`${own ? 'Tú' : message.senderName}, ${clock(message.createdAt)}: ${message.text}`}
+        accessibilityLabel={`${own ? 'Tú' : message.senderName}, ${clock(message.createdAt)}: ${message.text}${own ? `, ${status}` : ''}`}
         style={[
           {
             maxWidth: '84%',
@@ -442,8 +475,14 @@ function Bubble({row, showName, now}: {row: Row; showName: boolean; now: Date}) 
           <Text style={{fontSize: 12, lineHeight: 16, color: c.onBubbleSoft, fontVariant: ['tabular-nums']}}>
             {clock(message.createdAt)}
           </Text>
-          {/* Una palomita: guardado por el servidor. No hay datos de lectura, así que no hay doble palomita. */}
-          {own && <Icon name="check" size={14} color={c.onBubbleSoft} />}
+          {own && message.seen && showName && <Text style={[type.caption, {color: c.onBubbleSoft}]}>{status}</Text>}
+          {own && (
+            <Icon
+              name={message.seen ? 'checkDouble' : 'check'}
+              size={14}
+              color={message.seen ? c.primary : c.onBubbleSoft}
+            />
+          )}
         </View>
         {/* Cola de la burbuja en el primer mensaje de cada tanda. */}
         {startsRun && (

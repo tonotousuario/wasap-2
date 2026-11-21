@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1216">
+  <title>Wasap 2 · Demostración en red local</title>
+  <link rel="stylesheet" href="demo.css">
+  <script src="demo.js" defer></script>
+</head>
+<body>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="previous" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="next" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="expand" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="double-check" viewBox="0 0 24 24"><path d="m2 13 4 4L17 6m-5 11L23 6"/></symbol>
+  </svg>
+  <main id="stage" class="stage" aria-label="Presentación de Wasap 2">
+    <div id="canvas" class="canvas">
+      <section class="slide cover" aria-labelledby="cover-title">
+        <div class="cover-copy">
+          <h1 id="cover-title">Wasap <em>2</em></h1>
+          <p class="cover-deck">Chat y asistencia<br>en una red local</p>
+          <p class="cover-caption">Demostración con dos teléfonos y un emulador</p>
+        </div>
+        <figure class="cover-media" aria-label="Capturas de Wasap en Android">
+          <img class="cover-attendance" src="../docs/images/wasap-attendance-in.png" alt="Asistencia con entrada confirmada" width="540" height="1200">
+          <img class="cover-chat" src="../docs/images/wasap-thread.png" alt="Conversación General con mensajes de prueba" width="540" height="1200">
+          <img class="cover-class" src="../docs/images/android-class-teacher.png" alt="Asistencia con varias clases disponibles" width="540" height="1200">
+        </figure>
+        <p class="speaker-note" hidden>Presenta los dos teléfonos como estudiantes. Deja el emulador abierto con el profesor y el navegador en el panel web. Duración sugerida de la demo en vivo: cinco minutos.</p>
+      </section>
+
+      <section class="slide setup" aria-labelledby="setup-title" hidden>
+        <div class="slide-copy">
+          <h2 id="setup-title">La mesa de la demo</h2>
+          <p class="lede">Los tres dispositivos usan el mismo servidor en la Wi‑Fi del aula.</p>
+          <dl class="roles">
+            <div><dt>Dos teléfonos</dt><dd>Estudiantes con el APK de Wasap</dd></div>
+            <div><dt>Pixel 10 emulado</dt><dd>Profesor de <strong>Prueba LAN</strong></dd></div>
+            <div><dt>Computadora</dt><dd>Servidor Kotlin, PostgreSQL y panel web</dd></div>
+          </dl>
+          <p class="ports"><code>5050</code> App por TCP/TLS<br><code>5443</code> Panel por HTTPS</p>
+        </div>
+        <figure class="panel-frame">
+          <img src="../docs/images/panel-admin.png" alt="Panel web de Wasap en la sección Usuarios" width="1200" height="870">
+          <figcaption>Panel web de Wasap. Captura de referencia.</figcaption>
+        </figure>
+        <p class="speaker-note" hidden>En el panel abre Servidor. Si el teléfono aún no conoce el servidor, escanea el QR o pega su enlace. Comprueba la IP Wi‑Fi y el puerto 5050. Para la red de prueba actual, la IP era 192.168.1.66. Verifícala antes de presentar.</p>
+      </section>
+
+      <section class="slide signup" aria-labelledby="signup-title" hidden>
+        <header class="slide-heading">
+          <h2 id="signup-title">Alta con código de clase</h2>
+          <p class="lede">El estudiante elige su PIN. El profesor aprueba el ingreso.</p>
+        </header>
+        <div class="signup-story">
+          <figure>
+            <div class="phone-window"><img src="../docs/images/android-signup-form.png" alt="Formulario de registro con código, matrícula, nombre y PIN" width="540" height="1200"></div>
+            <figcaption><strong>1. Solicitud</strong><span>El estudiante completa «Soy nuevo».</span></figcaption>
+          </figure>
+          <figure>
+            <div class="phone-window"><img src="../docs/images/android-signup-pending.png" alt="Aviso de que el registro espera aprobación" width="540" height="1200"></div>
+            <figcaption><strong>2. Aprobación</strong><span>El profesor revisa la solicitud.</span></figcaption>
+          </figure>
+          <figure>
+            <div class="phone-window"><img src="../docs/images/android-signup-approved.png" alt="Asistencia disponible después de iniciar sesión tras la aprobación" width="540" height="1200"></div>
+            <figcaption><strong>3. Inicio de sesión</strong><span>El estudiante entra con matrícula y PIN.</span></figcaption>
+          </figure>
+        </div>
+        <p class="speaker-note" hidden>En el Pixel 10 abre Asistencia, selecciona Prueba LAN y entra en Lista de la clase. Usa el código vigente de esa pantalla. En el teléfono, registra una matrícula nueva y aprueba la solicitud en el emulador. Para una cuenta existente, añádela como integrante desde el chat de la clase.</p>
+      </section>
+
+      <section class="slide receipts" aria-labelledby="receipts-title" hidden>
+        <header class="slide-heading">
+          <h2 id="receipts-title">Palomitas honestas</h2>
+          <p class="lede">El servidor confirma cuándo se guardó y cuándo se mostró el mensaje.</p>
+        </header>
+        <div class="receipt-layout">
+          <div class="receipt-actions" role="group" aria-label="Cambiar el estado del ejemplo">
+            <button type="button" class="receipt-step" data-receipt="0" aria-pressed="true">
+              <svg class="icon" aria-hidden="true"><use href="#clock"/></svg>
+              <span><strong>Pendiente</strong><small>El teléfono espera la respuesta.</small></span>
+            </button>
+            <button type="button" class="receipt-step" data-receipt="1" aria-pressed="false">
+              <svg class="icon" aria-hidden="true"><use href="#check"/></svg>
+              <span><strong>Enviado</strong><small>El servidor guardó el mensaje.</small></span>
+            </button>
+            <button type="button" class="receipt-step" data-receipt="2" aria-pressed="false">
+              <svg class="icon" aria-hidden="true"><use href="#double-check"/></svg>
+              <span><strong>Visto</strong><small>Otro participante tuvo el mensaje visible con el chat abierto.</small></span>
+            </button>
+          </div>
+          <figure class="receipt-demo">
+            <figcaption>Ejemplo interactivo · Chat General</figcaption>
+            <div class="message-demo" data-state="0">
+              <p>Ya llegué al salón.</p>
+              <div class="message-meta" aria-live="polite">
+                <span class="message-time">09:10</span>
+                <svg class="icon" aria-hidden="true"><use id="receipt-icon" href="#clock"/></svg>
+                <span id="receipt-label">Pendiente</span>
+              </div>
+            </div>
+            <p class="receipt-foot">En General y grupos, la doble marca especifica «Visto por alguien».</p>
+          </figure>
+        </div>
+        <p class="speaker-note" hidden>Usa este ejemplo para explicar qué significa cada marca. Después envía en General desde el teléfono A mientras B está fuera del chat. Debe quedar una palomita. Abre General en B y deja el mensaje visible. A debe pasar a dos palomitas. Compruébalo en ambos teléfonos con el APK actualizado.</p>
+      </section>
+
+      <section class="slide attendance" aria-labelledby="attendance-title" hidden>
+        <div class="slide-copy">
+          <h2 id="attendance-title">La lista<br>del profesor</h2>
+          <p class="lede">Una entrada desde el teléfono aparece con matrícula y hora en el informe de su clase.</p>
+          <p class="path">Asistencia <span>›</span> Prueba LAN <span>›</span> Lista de la clase</p>
+        </div>
+        <div class="attendance-media">
+          <figure>
+            <div class="phone-window"><img src="../docs/images/android-class-attendance.png" alt="Pantalla del estudiante con su entrada confirmada" width="540" height="1200"></div>
+            <figcaption>Estudiante</figcaption>
+          </figure>
+          <figure>
+            <div class="phone-window"><img src="../docs/images/android-class-report.png" alt="Informe del profesor con nombre, matrícula y hora por movimiento" width="540" height="1200"></div>
+            <figcaption>Profesor</figcaption>
+          </figure>
+        </div>
+        <p class="speaker-note" hidden>En el teléfono selecciona Prueba LAN y registra la entrada. En el emulador vuelve a abrir la lista o actualiza el informe para mostrar la matrícula y hora. Las capturas corresponden a otra clase de prueba. En la demo en vivo usa Prueba LAN.</p>
+      </section>
+
+      <section class="slide recovery" aria-labelledby="recovery-title" hidden>
+        <div class="slide-copy">
+          <h2 id="recovery-title">Reenvío tras<br>un corte de Wi‑Fi</h2>
+          <p class="lede">Si el mensaje quedó en cola, Wasap vuelve a intentar con el mismo identificador.</p>
+          <ol class="recovery-steps">
+            <li>Envía un mensaje y corta la conexión.</li>
+            <li>Reconecta el teléfono y vuelve al chat.</li>
+            <li>Comprueba que aparece una sola copia.</li>
+          </ol>
+        </div>
+        <figure class="recovery-media">
+          <div class="phone-window"><img src="../docs/images/android-outbox-queued.png" alt="Chat con envíos en cola marcados como pendientes" width="540" height="1200"></div>
+          <figcaption>Mensajes en espera de confirmación</figcaption>
+        </figure>
+        <p class="speaker-note" hidden>Corta el Wi‑Fi justo después de tocar Enviar. Si el mensaje ya tenía palomita cuando cortaste, el servidor había confirmado el envío. Si ves el reloj, deja que se resuelva después de reconectar. Busca el mismo texto en ambos teléfonos.</p>
+      </section>
+
+      <section class="slide live" aria-labelledby="live-title" hidden>
+        <div class="slide-copy">
+          <h2 id="live-title">Demostración<br><em>en vivo</em></h2>
+          <p class="lede">Dos teléfonos.<br>La lista del profesor en el emulador.</p>
+        </div>
+        <ol class="run-sheet">
+          <li><span>01</span><div><strong>Alta de un estudiante</strong><p>Código de clase, solicitud y aprobación.</p></div></li>
+          <li><span>02</span><div><strong>Mensaje en General</strong><p>Una palomita al guardar. Dos cuando el otro teléfono lo muestra.</p></div></li>
+          <li><span>03</span><div><strong>Entrada en Prueba LAN</strong><p>El profesor consulta la matrícula y la hora.</p></div></li>
+          <li><span>04</span><div><strong>Reconexión</strong><p>El mensaje pendiente se resuelve una sola vez.</p></div></li>
+        </ol>
+        <p class="speaker-note" hidden>Deja esta diapositiva proyectada para pasar a la demo. La vista del profesor se abrió en el Pixel 10 y el servidor LAN respondió con TLS válido. La transición de palomitas entre los teléfonos físicos se comprueba aquí en vivo. Si el entorno no acompaña, vuelve a la diapositiva interactiva.</p>
+      </section>
+    </div>
+  </main>
+
+  <aside id="notes" class="notes" aria-labelledby="notes-title" hidden>
+    <h2 id="notes-title">Notas para presentar</h2>
+    <p id="notes-copy"></p>
+  </aside>
+
+  <footer class="controls" aria-label="Controles de presentación">
+    <button type="button" id="back" aria-label="Diapositiva anterior" title="Anterior (←)">
+      <svg class="icon" aria-hidden="true"><use href="#previous"/></svg>
+    </button>
+    <output id="position" aria-live="polite" aria-label="Diapositiva actual">1 / 7</output>
+    <button type="button" id="forward" aria-label="Diapositiva siguiente" title="Siguiente (→)">
+      <svg class="icon" aria-hidden="true"><use href="#next"/></svg>
+    </button>
+    <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+    <button type="button" id="notes-toggle" aria-controls="notes" aria-expanded="false" title="Notas (N)">Notas</button>
+    <button type="button" id="full" aria-label="Pantalla completa" aria-pressed="false" title="Pantalla completa (F)">
+      <svg class="icon" aria-hidden="true"><use href="#expand"/></svg>
+    </button>
+  </footer>
+</body>
+</html>

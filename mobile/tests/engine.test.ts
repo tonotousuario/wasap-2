@@ -110,6 +110,39 @@ test('reconnect recovers using the last fetched cursor, never a live event that 
   );
   assert.equal(pages, 2);
 });
+test('seen ticks come from the server and survive duplicate message responses', async () => {
+  const t = setup();
+  await t.engine.initialize();
+  const base = t.setHandler(async (type, payload) => {
+    if (type === 'server.hello') return {messageReceipts: true};
+    if (type === 'messages.seen') return {seenIds: ['m1']};
+    return base(type, payload);
+  });
+  await t.engine.login('123', '123456');
+  assert.equal(t.engine.state.messages.r1[0].seen, undefined);
+  await t.engine.confirmVisibleMessages('r1', ['m1']);
+  assert.equal(t.engine.state.messages.r1[0].seen, true);
+  t.event({v: 1, kind: 'event', id: 'e', type: 'message.created', payload: {message: message('2')}});
+  t.event({v: 1, kind: 'event', id: 'e', type: 'message.seen', payload: {conversationId: 'r1', messageIds: ['m2']}});
+  t.event({v: 1, kind: 'event', id: 'e', type: 'message.created', payload: {message: message('2')}});
+  assert.equal(t.engine.state.messages.r1[1].seen, true);
+  t.event({v: 1, kind: 'event', id: 'e', type: 'message.created', payload: {message: message('3')}});
+  t.event({v: 1, kind: 'event', id: 'e', type: 'message.created', payload: {message: {...message('3'), seen: true}}});
+  assert.equal(t.engine.state.messages.r1[2].seen, true);
+});
+
+test('older servers keep a single tick and receive no visibility requests', async () => {
+  const t = setup();
+  await t.engine.initialize();
+  await t.engine.login('123', '123456');
+  await t.engine.confirmVisibleMessages('r1', ['m1']);
+  assert.equal(
+    t.calls.some(call => call.type === 'messages.seen'),
+    false,
+  );
+  assert.equal(t.engine.state.messages.r1[0].seen, undefined);
+});
+
 test('attendance conflict refreshes authoritative state and unlocks the pending action', async () => {
   const t = setup();
   await t.engine.initialize();

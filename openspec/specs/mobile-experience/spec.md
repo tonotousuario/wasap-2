@@ -49,7 +49,7 @@ La app MUST NOT mostrar una operación como confirmada antes de la respuesta del
 - **THEN** la app muestra el aviso de pendiente, no una confirmación
 
 ### Requirement: Sin datos simulados
-La app MUST NOT mostrar lectura, presencia, contadores de no leídos ni ningún dato que el servidor no entregue.
+La app MUST NOT mostrar lectura, presencia, contadores de no leídos ni ningún dato que el servidor no entregue. El reloj indica envío pendiente y una palomita indica que el servidor guardó el mensaje. Dos palomitas requieren confirmación del servidor de que la app de otro participante mostró el mensaje en el chat abierto. En General y grupos la app SHALL usar «Visto por alguien».
 
 #### Scenario: Lista de chats
 - **WHEN** se muestra la lista de conversaciones

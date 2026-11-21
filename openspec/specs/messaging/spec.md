@@ -52,3 +52,14 @@ El servidor SHALL responder éxito a `messages.send` solo después del commit; s
 #### Scenario: Base caída durante el envío
 - **WHEN** PostgreSQL falla al guardar
 - **THEN** el cliente recibe un error y no una confirmación
+
+### Requirement: Confirmación de visibilidad
+`messages.seen {conversationId, messageIds}` SHALL aceptar de 1 a 50 IDs. Un participante puede confirmar mensajes de otros dentro de la conversación. El servidor SHALL guardar la primera confirmación de cada mensaje y avisar solo a su autor después del commit. El historial del autor SHALL incluir las confirmaciones guardadas.
+
+#### Scenario: Mensaje visible en otro dispositivo
+- **WHEN** otro participante tiene visible el mensaje y lo confirma
+- **THEN** su autor recibe `message.seen` y el mensaje conserva `seen:true` al consultar el historial
+
+#### Scenario: Confirmación repetida
+- **WHEN** otro dispositivo vuelve a confirmar un mensaje ya confirmado
+- **THEN** el estado se conserva sin emitir otro evento

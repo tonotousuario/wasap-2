@@ -168,7 +168,8 @@ class TcpServer(
                         if (request.string("kind") != "request") invalid("Se requiere una solicitud")
                         val type = request.string("type")
                         val payload = request["payload"] as? JsonObject ?: invalid("payload debe ser un objeto")
-                        val result = when (type) {
+                        val seen = if (type == "messages.seen") service.confirmSeen(authenticated().user.id, payload) else null
+                        val result = if (seen != null) obj("seenIds" to seen.ownIds) else when (type) {
                             "ping" -> obj("ready" to db.ready())
 
                             "server.hello" -> service.serverIdentity().let { identity ->
@@ -177,6 +178,7 @@ class TcpServer(
                                     "name" to identity.name,
                                     "protocolVersions" to PROTOCOL_VERSIONS,
                                     "caFingerprint" to caCertificate?.let(Tls::fingerprint),
+                                    "messageReceipts" to true,
                                 )
                             }
 
@@ -242,10 +244,22 @@ class TcpServer(
                             else -> withLinks(type, service.call(authenticated().user.id, type, payload, id))
                         }
                         if (session != null) socket.soTimeout = 90000
-                        send(obj("v" to 1, "kind" to "response", "id" to id, "type" to "success", "payload" to result), conversationId = if (type == "messages.list" || type == "groups.members") payload.uuid("conversationId") else null)
+                        val conversationId = when (type) {
+                            "messages.list", "groups.members", "messages.seen" -> payload.uuid("conversationId")
+                            else -> null
+                        }
+                        send(obj("v" to 1, "kind" to "response", "id" to id, "type" to "success", "payload" to result), conversationId = conversationId)
                         // Events are hints, never the only record of a committed operation.
                         try {
-                            notify(type, payload, result)
+                            if (seen == null) {
+                                notify(type, payload, result)
+                            } else {
+                                for ((author, ids) in seen.newByAuthor) {
+                                    val data = obj("conversationId" to conversationId, "messageIds" to ids)
+                                    val frame = obj("v" to 1, "kind" to "event", "id" to UUID.randomUUID(), "type" to "message.seen", "payload" to data)
+                                    eventBus.publish(SocketEvent(frame, setOf(author), conversationId))
+                                }
+                            }
                         } catch (_: Exception) {
                             System.err.println("event delivery deferred to history sync")
                         }
