@@ -1,5 +1,15 @@
 # Presentación de avances — WASAP 2
 
+## Presentación «Solo lo que el servidor confirmó»
+
+Abre [show.html](show.html) en el navegador (funciona sin conexión). Son nueve diapositivas animadas que cuentan el proyecto con la regla de la marca: una burbuja **punteada** está pendiente y una **sólida** ya la confirmó el servidor.
+
+- Avanza con **→** o **Espacio**, retrocede con **←**, pulsa **F** para pantalla completa y **N** para las notas.
+- **Palomitas honestas** se anima sola; las teclas **1**, **2** y **3** fijan un estado.
+- **Ahora, a probarlo** deja cada paso de la demo como burbuja punteada; pulsa **1–4** (o haz clic) para confirmarlo cuando lo compruebes en vivo.
+- La longitud de la trama de la diapositiva 4 se calcula con los bytes reales del ejemplo.
+- Respeta «reducir movimiento» del sistema. La fuente Bricolage Grotesque (OFL) está en `show-assets/`.
+
 ## Demostración en red local
 
 Abre [demo.html](demo.html) en el navegador. Incluye siete diapositivas con capturas de referencia, un ejemplo interactivo de las palomitas y la secuencia para presentar con dos teléfonos y el emulador del profesor.

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#037857">
+  <title>Wasap 2 · Solo lo que el servidor confirmó</title>
+  <link rel="stylesheet" href="show.css">
+  <script src="show.js" defer></script>
+</head>
+<body data-theme="green">
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="double" viewBox="0 0 24 24"><path d="m2 13 4 4L17 6m-5 11L23 6"/></symbol>
+    <symbol id="cross" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></symbol>
+    <symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="wifi-off" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 5-3M22 8.8a15 15 0 0 0-8.5-3.7M5 12.9a10 10 0 0 1 3.7-2.2M19 12.9a10 10 0 0 0-3-2M8.5 16.4a5 5 0 0 1 7 0M12 20h.01M3 3l18 18"/></symbol>
+  </svg>
+
+  <main id="stage" aria-label="Presentación de Wasap 2">
+    <div id="canvas">
+
+      <!-- 1 · Portada -->
+      <section class="slide s-green" data-note="Abre con la regla del proyecto: la app solo muestra lo que el servidor confirmó. Las burbujas punteadas son pendientes; las sólidas, confirmadas. Toda la presentación usa esa misma lógica.">
+        <h1 class="logo" aria-label="Wasap 2">
+          <span class="pop" style="--d:0s">W</span><span class="pop" style="--d:.07s">a</span><span class="pop" style="--d:.14s">s</span><span class="pop" style="--d:.21s">a</span><span class="pop" style="--d:.28s">p</span><span class="two pop" style="--d:.42s">2</span>
+        </h1>
+        <p class="tagline pop" style="--d:.6s">Solo muestra lo que<br>el servidor confirmó.</p>
+        <p class="kicker-line pop" style="--d:.8s">Asistencia y chat por TCP + TLS · red local del aula</p>
+        <div class="stairs" aria-hidden="true">
+          <div class="b cm stair" style="--d:.9s; left:880px; top:800px"><svg class="ico clock"><use href="#clock"/></svg><svg class="ico tick"><use href="#check"/></svg></div>
+          <div class="b cm stair" style="--d:1.5s; left:1130px; top:665px"><svg class="ico clock"><use href="#clock"/></svg><svg class="ico tick"><use href="#check"/></svg></div>
+          <div class="b cm stair" style="--d:2.1s; left:1380px; top:530px"><svg class="ico clock"><use href="#clock"/></svg><svg class="ico tick"><use href="#check"/></svg></div>
+          <div class="b cm stair" style="--d:2.7s; left:1630px; top:395px"><svg class="ico clock"><use href="#clock"/></svg><svg class="ico tick seen"><use href="#double"/></svg></div>
+        </div>
+      </section>
+
+      <!-- 2 · El salón en una app -->
+      <section class="slide s-cream" data-note="Dos cosas que pasan en el salón: pasar lista y avisar al grupo. Wasap las junta en una app para Android y iPhone. Las capturas son reales de la alpha firmada.">
+        <h2 class="h-xl pop" style="--d:0s">Pasa lista.<br>Escribe<br>al grupo.</h2>
+        <ul class="points">
+          <li class="b cm" style="--d:.5s">Entrada y salida, alternadas</li>
+          <li class="b cm" style="--d:1.1s">General, privados y grupos de hasta 100</li>
+          <li class="b cm" style="--d:1.7s">Protocolo propio, sin HTTP</li>
+        </ul>
+        <div class="phone p1 pop" style="--d:.3s"><img src="../docs/images/wasap-attendance-in.png" alt="Asistencia: Dentro, entrada confirmada por el servidor" width="540" height="1200"></div>
+        <div class="phone p2 pop" style="--d:.55s"><img src="../docs/images/wasap-thread.png" alt="Chat General con mensajes confirmados" width="540" height="1200"></div>
+        <div class="b cm chip c1" style="--d:1.2s"><svg class="ico tick"><use href="#check"/></svg>Dentro · confirmado por el servidor</div>
+        <div class="b cm chip c2" style="--d:1.9s"><svg class="ico tick seen"><use href="#double"/></svg>Visto por alguien</div>
+      </section>
+
+      <!-- 3 · La red del aula -->
+      <section class="slide s-night" data-note="Todo vive en la Wi‑Fi del salón. Los teléfonos hablan con el servidor por TCP + TLS en el puerto 5050. El profesor usa el emulador y el panel web por HTTPS en el 5443. Solo el servidor conoce las credenciales de PostgreSQL.">
+        <h2 class="h-lg pop" style="--d:0s">La red del aula</h2>
+        <div class="topo" aria-label="Teléfonos, servidor, base de datos y panel web">
+          <svg class="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+            <path d="M270 436 L650 585"/><path d="M270 666 L650 666"/><path d="M270 896 L650 750"/>
+            <path d="M1170 590 L1390 440"/><path d="M1330 800 L1170 745"/>
+          </svg>
+          <div class="node ph" style="left:140px; top:320px; --d:.3s"><img src="../docs/images/wasap-attendance-in.png" alt="" width="540" height="1200"><span>Estudiante</span></div>
+          <div class="node ph" style="left:140px; top:550px; --d:.45s"><img src="../docs/images/wasap-thread.png" alt="" width="540" height="1200"><span>Estudiante</span></div>
+          <div class="node ph" style="left:140px; top:780px; --d:.6s"><img src="../docs/images/android-class-teacher.png" alt="" width="540" height="1200"><span>Profesor</span></div>
+          <div class="node server pop" style="--d:.8s"><strong>Servidor</strong><span>Kotlin · JVM 25</span><div class="ports"><code>5050</code> TCP + TLS<br><code>5443</code> panel HTTPS</div></div>
+          <div class="node db pop" style="--d:1s"><svg viewBox="0 0 120 130" aria-hidden="true"><ellipse cx="60" cy="24" rx="52" ry="18"/><path d="M8 24v70c0 10 23 18 52 18s52-8 52-18V24"/><path d="M8 59c0 10 23 18 52 18s52-8 52-18"/></svg><strong>PostgreSQL</strong><span>JDBC · transacciones</span></div>
+          <div class="node panel pop" style="--d:1.2s"><img src="../docs/images/panel-teacher.png" alt="Panel web de profesores" width="1200" height="870"><span>Panel web</span></div>
+          <span class="lbl" style="left:300px; top:700px">TCP + TLS · 5050</span>
+          <span class="lbl" style="left:1190px; top:690px">HTTPS</span>
+          <span class="lbl" style="left:1230px; top:490px">JDBC</span>
+          <i class="pk req" style="--p:'M270 436 L650 585'; --o:0s"></i><i class="pk res" style="--p:'M650 585 L270 436'; --o:1.5s"><svg class="ico"><use href="#check"/></svg></i>
+          <i class="pk req" style="--p:'M270 666 L650 666'; --o:.8s"></i><i class="pk res" style="--p:'M650 666 L270 666'; --o:2.3s"><svg class="ico"><use href="#check"/></svg></i>
+          <i class="pk req" style="--p:'M270 896 L650 750'; --o:1.6s"></i><i class="pk res" style="--p:'M650 750 L270 896'; --o:3.1s"><svg class="ico"><use href="#check"/></svg></i>
+          <i class="pk req" style="--p:'M1170 590 L1390 440'; --o:1.1s"></i>
+          <i class="pk req" style="--p:'M1330 800 L1170 745'; --o:2s"></i>
+        </div>
+      </section>
+
+      <!-- 4 · La trama -->
+      <section class="slide s-green" data-theme-key="frame" data-note="Cada mensaje es una trama: cuatro bytes con la longitud y un JSON en UTF-8. La longitud que ves se calcula en vivo con los bytes reales del ejemplo. Hasta que la trama está completa, la cabecera sigue punteada.">
+        <h2 class="h-lg pop" style="--d:0s">Cada mensaje<br>es una trama</h2>
+        <div class="frame" id="frame">
+          <div class="hdr b ghost" id="hdr"><code id="hdr-hex">00 00 00 00</code><svg class="ico tick"><use href="#check"/></svg></div>
+          <div class="body"><pre id="json" aria-label="Ejemplo de mensaje JSON"></pre><i class="caret" id="caret"></i></div>
+          <p class="cap c-hdr"><b id="bytes">0</b> bytes · longitud <em>uint32</em></p>
+          <p class="cap c-body">JSON UTF-8 · <em>{ v, kind, id, type, payload }</em></p>
+        </div>
+        <ul class="facts">
+          <li class="b cm" style="--d:4.6s"><svg class="ico"><use href="#lock"/></svg>TLS en el puerto 5050</li>
+          <li class="b cm" style="--d:5.2s">De 1 a 65 536 bytes por trama</li>
+          <li class="b cm" style="--d:5.8s">Sin HTTP: <code>longitud | JSON</code></li>
+        </ul>
+      </section>
+
+      <!-- 5 · Palomitas honestas -->
+      <section class="slide s-cream" data-keys="3" data-note="Un reloj es pendiente. Una palomita es enviado: el servidor ya lo guardó. Dos palomitas significan que otro participante lo tuvo en pantalla con el chat abierto. En General y grupos se indica «Visto por alguien». Las teclas 1, 2 y 3 fijan un estado.">
+        <h2 class="h-lg pop" style="--d:0s">Palomitas<br>honestas</h2>
+        <div class="receipt pop" style="--d:.4s" id="receipt" data-state="0">
+          <p class="msg">Ya llegué al salón.</p>
+          <div class="meta"><code>09:10</code><svg class="ico st"><use id="r-icon" href="#clock"/></svg><span id="r-label">Pendiente</span></div>
+        </div>
+        <ol class="ladder" id="ladder">
+          <li data-i="0"><svg class="ico"><use href="#clock"/></svg>Pendiente</li>
+          <li data-i="1"><svg class="ico"><use href="#check"/></svg>Enviado</li>
+          <li data-i="2"><svg class="ico"><use href="#double"/></svg>Visto</li>
+        </ol>
+        <div class="bigmark pop" style="--d:.7s" id="bigmark" data-state="0" aria-hidden="true"><svg id="big" viewBox="0 0 24 24"><use id="big-use" href="#clock"/></svg></div>
+        <p class="desc pop" style="--d:.9s" id="r-desc" aria-live="polite">El teléfono espera la respuesta del servidor.</p>
+      </section>
+
+      <!-- 6 · Reintentar no duplica -->
+      <section class="slide s-night" data-note="El servidor guarda y confirma solo después del commit. Si se pierde la respuesta, el teléfono reintenta con el mismo UUID; el servidor reconoce la solicitud, repite el resultado y no inserta otra fila.">
+        <h2 class="h-lg pop" style="--d:0s">Reintentar no duplica</h2>
+        <p class="story" id="story" aria-live="polite">1 · El teléfono envía la solicitud con un UUID.</p>
+        <div class="lanes" id="lanes">
+          <div class="lane" style="left:260px"><span class="b head">Teléfono</span><i></i></div>
+          <div class="lane" style="left:960px"><span class="b head">Servidor</span><i></i></div>
+          <div class="lane" style="left:1660px"><span class="b head">PostgreSQL</span><i></i></div>
+          <div class="rows" id="rows"><small>filas</small><b id="rows-n">0</b></div>
+
+          <div class="arrow r" data-s="0" style="left:260px; width:700px; top:520px"><span class="tag">attendance.mark · id b1d4…</span></div>
+          <div class="arrow r" data-s="1" style="left:960px; width:700px; top:640px"><span class="tag">INSERT + COMMIT</span></div>
+          <div class="arrow l lost" data-s="2" style="left:260px; width:700px; top:760px"><span class="tag bad">respuesta ✓</span><svg class="ico x"><use href="#wifi-off"/></svg></div>
+          <div class="arrow r retry" data-s="3" style="left:260px; width:700px; top:880px"><span class="tag">reintento · mismo id</span></div>
+          <div class="arrow l ok" data-s="4" style="left:260px; width:700px; top:1000px"><span class="tag good">ya lo tenía · ✓ una sola fila</span></div>
+        </div>
+      </section>
+
+      <!-- 7 · Clases y profesores -->
+      <section class="slide s-green" data-note="El profesor crea la clase y ve su código en «Lista de la clase». El estudiante se registra con ese código y elige su PIN. El profesor aprueba la solicitud y nadie más conoce el PIN.">
+        <h2 class="h-lg pop" style="--d:0s">La clase<br>se arma sola</h2>
+        <ol class="chain">
+          <li class="b cm" style="--d:.5s"><b>1</b><span><strong>Código de clase</strong>El profesor lo ve en «Lista de la clase».</span></li>
+          <li class="b cm" style="--d:1.2s"><b>2</b><span><strong>Solicitud</strong>El estudiante elige su PIN.</span></li>
+          <li class="b cm" style="--d:1.9s"><b>3</b><span><strong>Aprobación</strong>El profesor aprueba en la app.</span></li>
+          <li class="b cm" style="--d:2.6s"><b>4</b><span><strong>Entrada</strong>Se registra solo dentro de su clase.</span></li>
+        </ol>
+        <div class="browser pop" style="--d:.4s"><div class="bar"><i></i><i></i><i></i></div><img src="../docs/images/panel-teacher.png" alt="Panel de profesores: clase Redes 5A con código y solicitudes" width="1200" height="870"></div>
+        <div class="phone p3 pop" style="--d:.9s"><img src="../docs/images/android-class-report.png" alt="Lista de la clase con movimientos de hoy" width="540" height="1200"></div>
+      </section>
+
+      <!-- 8 · Evidencia -->
+      <section class="slide s-cream" data-note="Lo comprobado está en docs/verification.md, con fechas del 17 al 20 de noviembre de 2026. Los pendientes se dicen en voz alta: la entrega entre dos dispositivos y la recuperación tras cortar el Wi‑Fi se comprueban hoy en la demo.">
+        <h2 class="h-lg h-md pop" style="--d:0s" id="t8">Lo comprobado y lo pendiente</h2>
+        <div class="col done">
+          <ul>
+            <li class="b cm" style="--d:.4s"><svg class="ico tick"><use href="#check"/></svg><span><strong>41 pruebas de servidor</strong>PostgreSQL desechable, TLS, permisos y reintentos.</span></li>
+            <li class="b cm" style="--d:.9s"><svg class="ico tick"><use href="#check"/></svg><span><strong>49 pruebas móviles</strong>Y TypeScript aprobados.</span></li>
+            <li class="b cm" style="--d:1.4s"><svg class="ico tick"><use href="#check"/></svg><span><strong>Alpha firmada en Android</strong>Entrada, mensajes en orden, reconexión sin pedir PIN.</span></li>
+            <li class="b cm" style="--d:1.9s"><svg class="ico tick"><use href="#check"/></svg><span><strong>Cola de envío</strong>Con el servidor en pausa, una sola fila por mensaje.</span></li>
+          </ul>
+        </div>
+        <div class="col todo">
+          <ul>
+            <li class="b ghost pop" style="--d:1s"><svg class="ico"><use href="#clock"/></svg><span><strong>Dos dispositivos a la vez</strong>Y recuperación tras cortar el Wi‑Fi. Hoy, en vivo.</span></li>
+            <li class="b ghost pop" style="--d:1.2s"><svg class="ico"><use href="#clock"/></svg><span><strong>iPhone</strong>Registrar el equipo y probar la build ad hoc.</span></li>
+            <li class="b ghost pop" style="--d:1.4s"><svg class="ico"><use href="#clock"/></svg><span><strong>TLS negativo en dispositivo</strong>CA incorrecta, vencido o SAN equivocado.</span></li>
+            <li class="b ghost pop" style="--d:1.6s"><svg class="ico"><use href="#clock"/></svg><span><strong>QR con cámara física</strong>Servidor e invitación.</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 9 · En vivo -->
+      <section class="slide s-live" data-keys="4" data-note="Pulsa 1, 2, 3 o 4 para confirmar cada paso mientras lo haces en los teléfonos y en el emulador. Cada burbuja pasa de punteada a sólida: pendiente hasta que se comprueba de verdad.">
+        <p class="rec pop" style="--d:0s"><i></i>En vivo</p>
+        <h2 class="h-xxl pop" style="--d:.15s">Ahora,<br>a probarlo.</h2>
+        <ol class="run" id="run">
+          <li class="b ghost pop" data-i="0" style="--d:.6s"><b>1</b><span>Alta de un estudiante</span><svg class="ico tick"><use href="#check"/></svg></li>
+          <li class="b ghost pop" data-i="1" style="--d:.8s"><b>2</b><span>Mensaje en General: ✓ y luego ✓✓</span><svg class="ico tick"><use href="#double"/></svg></li>
+          <li class="b ghost pop" data-i="2" style="--d:1s"><b>3</b><span>Entrada en Prueba LAN</span><svg class="ico tick"><use href="#check"/></svg></li>
+          <li class="b ghost pop" data-i="3" style="--d:1.2s"><b>4</b><span>Corte de Wi‑Fi y reenvío</span><svg class="ico tick"><use href="#check"/></svg></li>
+        </ol>
+        <p class="hint pop" style="--d:1.6s">Pulsa 1 – 4 para confirmar cada paso</p>
+      </section>
+
+    </div>
+  </main>
+
+  <nav id="dots" aria-label="Diapositivas"></nav>
+  <aside id="notes" hidden><h2>Notas</h2><p id="notes-copy"></p></aside>
+</body>
+</html>
