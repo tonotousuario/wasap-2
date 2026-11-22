@@ -10,6 +10,16 @@ const full = document.querySelector('#full');
 const receiptButtons = Array.from(document.querySelectorAll('[data-receipt]'));
 let current = 0;
 
+// Cabecera uint32 con la longitud UTF-8 real del texto visible de la diapositiva.
+function frameLength(slide) {
+  const body = Array.from(slide.children)
+    .filter(el => !el.matches('.frame-head, .speaker-note'))
+    .map(el => el.textContent).join(' ').replace(/\s+/g, ' ').trim();
+  const n = new TextEncoder().encode(body).length;
+  return n.toString(16).padStart(8, '0').toUpperCase().match(/../g).join(' ');
+}
+slides.forEach(slide => { slide.querySelector('.frame-len').textContent = frameLength(slide); });
+
 function fit() {
   const scale = Math.min(stage.clientWidth / 1440, stage.clientHeight / 810);
   canvas.style.setProperty('--scale', scale);

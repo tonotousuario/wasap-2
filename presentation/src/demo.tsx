@@ -80,6 +80,11 @@ function DemoSlide({scene, index}: {scene: Scene; index: number}) {
 			return;
 		}
 		slide.hidden = false;
+		const body = Array.from(slide.children)
+			.filter(el => !el.matches('.frame-head, .speaker-note'))
+			.map(el => el.textContent).join(' ').replace(/\s+/g, ' ').trim();
+		slide.querySelector('.frame-len')!.textContent = new TextEncoder().encode(body).length
+			.toString(16).padStart(8, '0').toUpperCase().match(/../g)!.join(' ');
 		if (scene.key === 'receipts') slide.querySelector('figcaption')!.textContent = 'Ejemplo · Chat General';
 		const images = Array.from(slide.querySelectorAll('img'));
 		images.forEach(image => {

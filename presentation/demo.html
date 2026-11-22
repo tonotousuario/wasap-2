@@ -20,6 +20,7 @@
   <main id="stage" class="stage" aria-label="Presentación de Wasap 2">
     <div id="canvas" class="canvas">
       <section class="slide cover" aria-labelledby="cover-title">
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.portada"</code><code class="frame-n">01 / 07</code></p>
         <div class="cover-copy">
           <h1 id="cover-title">Wasap <em>2</em></h1>
           <p class="cover-deck">Chat y asistencia<br>en una red local</p>
@@ -34,6 +35,7 @@
       </section>
 
       <section class="slide setup" aria-labelledby="setup-title" hidden>
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.mesa"</code><code class="frame-n">02 / 07</code></p>
         <div class="slide-copy">
           <h2 id="setup-title">La mesa de la demo</h2>
           <p class="lede">Los tres dispositivos usan el mismo servidor en la Wi‑Fi del aula.</p>
@@ -52,6 +54,7 @@
       </section>
 
       <section class="slide signup" aria-labelledby="signup-title" hidden>
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.registro"</code><code class="frame-n">03 / 07</code></p>
         <header class="slide-heading">
           <h2 id="signup-title">Alta con código de clase</h2>
           <p class="lede">El estudiante elige su PIN. El profesor aprueba el ingreso.</p>
@@ -74,6 +77,7 @@
       </section>
 
       <section class="slide receipts" aria-labelledby="receipts-title" hidden>
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.palomitas"</code><code class="frame-n">04 / 07</code></p>
         <header class="slide-heading">
           <h2 id="receipts-title">Palomitas honestas</h2>
           <p class="lede">El servidor confirma cuándo se guardó y cuándo se mostró el mensaje.</p>
@@ -103,6 +107,7 @@
                 <span id="receipt-label">Pendiente</span>
               </div>
             </div>
+            <div class="receipt-track" aria-hidden="true"><span>Teléfono</span><span>Servidor</span><span>Otro teléfono</span></div>
             <p class="receipt-foot">En General y grupos, la doble marca especifica «Visto por alguien».</p>
           </figure>
         </div>
@@ -110,6 +115,7 @@
       </section>
 
       <section class="slide attendance" aria-labelledby="attendance-title" hidden>
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.asistencia"</code><code class="frame-n">05 / 07</code></p>
         <div class="slide-copy">
           <h2 id="attendance-title">La lista<br>del profesor</h2>
           <p class="lede">Una entrada desde el teléfono aparece con matrícula y hora en el informe de su clase.</p>
@@ -120,6 +126,7 @@
             <div class="phone-window"><img src="../docs/images/android-class-attendance.png" alt="Pantalla del estudiante con su entrada confirmada" width="540" height="1200"></div>
             <figcaption>Estudiante</figcaption>
           </figure>
+          <span class="attendance-link" aria-hidden="true"></span>
           <figure>
             <div class="phone-window"><img src="../docs/images/android-class-report.png" alt="Informe del profesor con nombre, matrícula y hora por movimiento" width="540" height="1200"></div>
             <figcaption>Profesor</figcaption>
@@ -129,6 +136,7 @@
       </section>
 
       <section class="slide recovery" aria-labelledby="recovery-title" hidden>
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.reenvio"</code><code class="frame-n">06 / 07</code></p>
         <div class="slide-copy">
           <h2 id="recovery-title">Reenvío tras<br>un corte de Wi‑Fi</h2>
           <p class="lede">Si el mensaje quedó en cola, Wasap vuelve a intentar con el mismo identificador.</p>
@@ -137,6 +145,7 @@
             <li>Reconecta el teléfono y vuelve al chat.</li>
             <li>Comprueba que aparece una sola copia.</li>
           </ol>
+          <p class="wire" aria-hidden="true"><code>request_id</code><span>=</span><code>mismo UUID</code><span>→</span><code>una copia</code></p>
         </div>
         <figure class="recovery-media">
           <div class="phone-window"><img src="../docs/images/android-outbox-queued.png" alt="Chat con envíos en cola marcados como pendientes" width="540" height="1200"></div>
@@ -146,6 +155,7 @@
       </section>
 
       <section class="slide live" aria-labelledby="live-title" hidden>
+        <p class="frame-head" aria-hidden="true"><code class="frame-len">00 00 00 00</code><code>"type":"demo.en-vivo"</code><code class="frame-n">07 / 07</code></p>
         <div class="slide-copy">
           <h2 id="live-title">Demostración<br><em>en vivo</em></h2>
           <p class="lede">Dos teléfonos.<br>La lista del profesor en el emulador.</p>
