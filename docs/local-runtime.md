@@ -58,8 +58,8 @@ flowchart LR
 
 La base no publica puertos al anfitrión. El servidor aplica las migraciones
 (Flyway) antes de escuchar. Compose local publica la app en `127.0.0.1:5050` y el
-panel en `127.0.0.1:5443`; para dispositivos en la LAN, `compose.yaml` publica los
-puertos en las interfaces del anfitrión.
+panel en `127.0.0.1:5443` por defecto. Para publicar el puerto de la app en la red
+local, usa `WASAP_APP_BIND` como se indica en la sección de la demo.
 
 ## PostgreSQL y servidor con Compose (recomendado)
 
@@ -114,6 +114,25 @@ curl --fail --cacert certs/ca.crt https://127.0.0.1:5443/login
 
 El panel usa `PANEL_PORT` (5443 por defecto). Con `PANEL_ENABLED=false` el servidor
 deja de atender en ese puerto. La app mantiene su conexión en `5050`.
+
+### Demo con teléfonos en la LAN
+
+El emulador usa `127.0.0.1:5050` mediante `adb reverse` aunque cambie el Wi-Fi.
+Si también usas teléfonos físicos, conecta los dispositivos a la misma red y
+consulta la IPv4 de la interfaz Wi-Fi del anfitrión con `ip -br -4 addr`.
+Desde la raíz del repositorio ejecuta lo siguiente con la IPv4 de esa red:
+
+```bash
+bash scripts/create-certs.sh 192.168.1.85 &&
+WASAP_APP_BIND=0.0.0.0 podman compose -f compose.local.yaml -f compose.local.podman.yaml up -d --force-recreate --no-deps server
+```
+
+Repite esos dos comandos al cambiar de red. El script conserva la CA existente
+en `certs/` e incluye la nueva IP y `127.0.0.1` en el certificado. En cada teléfono
+actualiza la dirección en **Servidores → editar dirección**, con puerto `5050`.
+Puedes usar el mismo APK. El panel sigue en `https://127.0.0.1:5443`.
+Si los teléfonos no llegan al servidor, comprueba que el firewall del anfitrión
+permita `5050/tcp` en esa red.
 
 ### Entorno nuevo con Docker
 

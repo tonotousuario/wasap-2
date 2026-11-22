@@ -30,7 +30,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "127.0.0.1:5050:5050"
+      - "${WASAP_APP_BIND:-127.0.0.1}:5050:5050"
       - "127.0.0.1:${PANEL_PORT:-5443}:${PANEL_PORT:-5443}/tcp"
     environment:
       SERVER_HOST: 0.0.0.0
